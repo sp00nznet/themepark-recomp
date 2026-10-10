@@ -55,6 +55,18 @@ calendar running, no faults, no unresolved dispatches), plus the lift's
 function and error counts. Any line worse than `conformance.json` fails. With
 no `game\` or no build it prints `SKIP` and exits 0. Today: 6/6.
 
+## On netlab
+
+The recipe is `projects/themepark-recomp.env` in recomp-netlab:
+
+```
+netlab check themepark-recomp --on testbox
+```
+
+builds on the farm (x64 clang-cl) and runs `tools\qa.cmd`, which is the
+conformance script where `game\` exists and `SKIP: no game data` where it
+doesn't (the test VMs).
+
 ## Windowed runs
 
 At the console, run windowed builds on a virtual monitor so they never land on
