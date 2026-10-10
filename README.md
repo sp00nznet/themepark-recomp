@@ -28,7 +28,7 @@ not done.
 | 640x480 SVGA mode | untested |
 | Sound and music | not yet |
 | Saving and loading | untested |
-| Own presenter (scaling, fullscreen) | GDI window with 4:3 letterbox, F11 fullscreen |
+| Own presenter | Direct3D 11: sharp-bilinear, smooth, CRT, nearest, integer (F12), vivid colour (F9), borderless fullscreen (F11); GDI fallback |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
 main menu, park calendar running, no faults, no unresolved dispatches.
@@ -107,14 +107,19 @@ build; a pcrecomp checkout older than the DOS host stops the configure with
 ## Usage
 
 ```
-themepark.exe                       play in a window (F11 / Alt+Enter: fullscreen)
+themepark.exe                       play in a window: F12 scaling, F9 vivid colour, F11 / Alt+Enter fullscreen
 themepark.exe --fps 35              the game's speed: frames per second (default 25)
+themepark.exe --scale crt           scaling: sharp (default), smooth, crt, nearest, integer
+themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
 themepark.exe --lang 1              language: 0 English (default), 1 German, 2 Italian, 3 Spanish, 4 French
 themepark.exe --headless --seconds 60 --record out.mp4
                                     no window: run 60 guest seconds and film it (needs ffmpeg)
 themepark.exe --headless --seconds 90 --click 10:160,100 --key 13:14 ...
                                     scripted input at guest times (game pixels, set-1 scancodes)
 ```
+
+Display choices are remembered in `themepark.ini` beside the exe (`[display]
+scale`, `vivid`, `fullscreen`, `vsync`; `[game] fps`).
 
 Headless runs keep their own clock, so the same script gives the same run every
 time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,

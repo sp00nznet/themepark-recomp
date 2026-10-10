@@ -5,6 +5,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Direct3D 11 presenter (gunman's shaders): sharp-bilinear, smooth, CRT,
+  nearest and integer scaling on F12, vivid colour on F9, borderless
+  fullscreen on F11 / Alt+Enter, vsync; GDI when Direct3D is unavailable.
+  Choices kept in `themepark.ini`, with `--scale`, `--fullscreen`, `--gdi`,
+  `--vsync` and `[game] fps`.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added

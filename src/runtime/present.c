@@ -1,50 +1,102 @@
 /*
- * The window: dos32's screen, letterboxed and scaled with GDI, and the
- * player's keys and mouse handed back to the game.
+ * The window: dos32's screen through our own presenter, and the player's keys
+ * and mouse handed back to the game.
  *
+ *   F12              scaling: sharp-bilinear (default), smooth, CRT, nearest, integer
+ *   F9               colour: natural / vivid
  *   F11, Alt+Enter   borderless fullscreen
+ *
+ * The picture is scaled by Direct3D 11 (present_d3d.c), or by GDI if that is
+ * unavailable. Choices are kept in themepark.ini beside the exe. The game's
+ * modes are 320x200 and 640x400 (both shown at 4:3, as their monitors did) and
+ * 640x480; integer scaling keeps square pixels instead.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "dos32.h"
 #include "present.h"
 
+present_settings g_present = { SCALE_SHARP, 0, 0, 1, 0 };
+
+static const char* scale_names[SCALE_COUNT] = { "sharp", "smooth", "crt", "nearest", "integer" };
+static char ini_path[MAX_PATH];
 static HWND wnd;
 static uint32_t frame[1024 * 768];
 static int fw = 320, fh = 200;
 static RECT dst;                 /* where the picture lands in the client area */
-static int fullscreen;
+static int cw, ch;
 static WINDOWPLACEMENT saved_place = { sizeof saved_place };
+static DWORD title_until;        /* show the scaling mode in the title for a moment */
 
-static void layout(int cw, int ch) {
-    /* Keep 4:3 whatever the mode's pixel aspect: 320x200 and 640x400 were
-     * shown on 4:3 monitors with tall pixels. */
-    int w = cw, h = cw * 3 / 4;
-    if (h > ch) { h = ch; w = ch * 4 / 3; }
+int present_scale_from_name(const char* name) {
+    for (int i = 0; i < SCALE_COUNT; i++) if (!_stricmp(name, scale_names[i])) return i;
+    return -1;
+}
+
+void present_load_settings(void) {
+    char buf[64];
+    GetModuleFileNameA(NULL, ini_path, MAX_PATH);
+    strcpy(strrchr(ini_path, '\\') + 1, "themepark.ini");
+    GetPrivateProfileStringA("display", "scale", "sharp", buf, sizeof buf, ini_path);
+    int s = present_scale_from_name(buf);
+    g_present.scale = s < 0 ? SCALE_SHARP : s;
+    g_present.look = GetPrivateProfileIntA("display", "vivid", 0, ini_path);
+    g_present.fullscreen = GetPrivateProfileIntA("display", "fullscreen", 0, ini_path);
+    g_present.vsync = GetPrivateProfileIntA("display", "vsync", 1, ini_path);
+}
+
+static void save_settings(void) {
+    WritePrivateProfileStringA("display", "scale", scale_names[g_present.scale], ini_path);
+    WritePrivateProfileStringA("display", "vivid", g_present.look ? "1" : "0", ini_path);
+    WritePrivateProfileStringA("display", "fullscreen", g_present.fullscreen ? "1" : "0", ini_path);
+}
+
+static void layout(void) {
+    int w, h;
+    if (g_present.scale == SCALE_INTEGER) {
+        int k = cw / fw < ch / fh ? cw / fw : ch / fh;
+        if (k < 1) k = 1;
+        w = fw * k; h = fh * k;
+    } else {
+        /* 4:3 whatever the mode's pixel aspect: 320x200 and 640x400 were shown
+         * on 4:3 monitors with tall pixels. */
+        w = cw; h = cw * 3 / 4;
+        if (h > ch) { h = ch; w = ch * 4 / 3; }
+    }
     dst.left = (cw - w) / 2; dst.top = (ch - h) / 2;
     dst.right = dst.left + w; dst.bottom = dst.top + h;
 }
 
-static void toggle_fullscreen(void) {
+static void set_title(void) {
+    char t[128];
+    if (GetTickCount() < title_until)
+        snprintf(t, sizeof t, "Theme Park - %s%s", scale_names[g_present.scale], g_present.look ? ", vivid" : "");
+    else
+        snprintf(t, sizeof t, "Theme Park");
+    SetWindowTextA(wnd, t);
+}
+
+static void apply_fullscreen(int on) {
     DWORD st = GetWindowLong(wnd, GWL_STYLE);
-    if (!fullscreen) {
+    if (on) {
         MONITORINFO mi = { sizeof mi };
-        GetWindowPlacement(wnd, &saved_place);
+        if (st & WS_OVERLAPPEDWINDOW) GetWindowPlacement(wnd, &saved_place);
         GetMonitorInfo(MonitorFromWindow(wnd, MONITOR_DEFAULTTOPRIMARY), &mi);
         SetWindowLong(wnd, GWL_STYLE, st & ~WS_OVERLAPPEDWINDOW);
         SetWindowPos(wnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
                      mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top,
                      SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-    } else {
+    } else if (!(st & WS_OVERLAPPEDWINDOW)) {
         SetWindowLong(wnd, GWL_STYLE, st | WS_OVERLAPPEDWINDOW);
         SetWindowPlacement(wnd, &saved_place);
         SetWindowPos(wnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
-    fullscreen = !fullscreen;
+    g_present.fullscreen = on;
 }
 
 static void mouse_to_game(LPARAM lp, WPARAM wp) {
@@ -57,38 +109,57 @@ static void mouse_to_game(LPARAM lp, WPARAM wp) {
     dos32_mouse(gx, gy, (wp & MK_LBUTTON ? 1 : 0) | (wp & MK_RBUTTON ? 2 : 0) | (wp & MK_MBUTTON ? 4 : 0));
 }
 
+/* GDI: the fallback when Direct3D 11 is unavailable. */
+static void gdi_paint(void) {
+    HDC dc = GetDC(wnd);
+    BITMAPINFO bi = { { sizeof(BITMAPINFOHEADER), fw, -fh, 1, 32, BI_RGB } };
+    HBRUSH black = GetStockObject(BLACK_BRUSH);
+    RECT bars[4] = { { 0, 0, cw, dst.top }, { 0, dst.bottom, cw, ch },
+                     { 0, dst.top, dst.left, dst.bottom }, { dst.right, dst.top, cw, dst.bottom } };
+    for (int i = 0; i < 4; i++) FillRect(dc, &bars[i], black);
+    SetStretchBltMode(dc, g_present.scale == SCALE_SMOOTH ? HALFTONE : COLORONCOLOR);
+    StretchDIBits(dc, dst.left, dst.top, dst.right - dst.left, dst.bottom - dst.top,
+                  0, 0, fw, fh, frame, &bi, DIB_RGB_COLORS, SRCCOPY);
+    ReleaseDC(wnd, dc);
+}
+
+static void render(void) {
+    int w, h;
+    if (dos32_frame(frame, 1024, 768, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
+    set_title();
+    if (g_present.gdi || !d3d_present(wnd, frame, fw, fh, &dst, cw, ch, g_present.scale, g_present.look,
+                                      g_present.vsync)) {
+        g_present.gdi = 1;
+        gdi_paint();
+        Sleep(16);
+    } else if (!g_present.vsync) Sleep(1);
+}
+
+static void key(LPARAM lp, int down) {
+    dos32_key(((lp >> 16) & 0xFF) | ((lp & (1 << 24)) ? 0xE000 : 0), down);
+}
+
 static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     switch (m) {
-    case WM_SIZE: layout(LOWORD(lp), HIWORD(lp)); InvalidateRect(h, NULL, TRUE); return 0;
+    case WM_SIZE: cw = LOWORD(lp); ch = HIWORD(lp); layout(); return 0;
     case WM_ERASEBKGND: return 1;
-    case WM_TIMER: {
-        int w, ht;
-        if (dos32_frame(frame, 1024, 768, &w, &ht)) { fw = w; fh = ht; }
-        InvalidateRect(h, NULL, FALSE);
-        return 0; }
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC dc = BeginPaint(h, &ps);
-        RECT rc; GetClientRect(h, &rc);
-        BITMAPINFO bi = { { sizeof(BITMAPINFOHEADER), fw, -fh, 1, 32, BI_RGB } };
-        HBRUSH black = GetStockObject(BLACK_BRUSH);
-        RECT bars[4] = { { 0, 0, rc.right, dst.top }, { 0, dst.bottom, rc.right, rc.bottom },
-                         { 0, dst.top, dst.left, dst.bottom }, { dst.right, dst.top, rc.right, dst.bottom } };
-        for (int i = 0; i < 4; i++) FillRect(dc, &bars[i], black);
-        SetStretchBltMode(dc, COLORONCOLOR);
-        StretchDIBits(dc, dst.left, dst.top, dst.right - dst.left, dst.bottom - dst.top,
-                      0, 0, fw, fh, frame, &bi, DIB_RGB_COLORS, SRCCOPY);
-        EndPaint(h, &ps);
-        return 0; }
+    case WM_PAINT: ValidateRect(h, NULL); return 0;
     case WM_SYSKEYDOWN:
-        if (wp == VK_RETURN && (lp & (1 << 29))) { toggle_fullscreen(); return 0; }
+        if (wp == VK_RETURN && (lp & (1 << 29))) { apply_fullscreen(!g_present.fullscreen); save_settings(); return 0; }
+        if (wp == VK_F10) return 0;       /* F10 would open the system menu */
         /* fall through: Alt is a game key */
     case WM_KEYDOWN:
-        if (wp == VK_F11) { toggle_fullscreen(); return 0; }
-        if (!(lp & (1 << 30))) dos32_key(((lp >> 16) & 0xFF) | ((lp & (1 << 24)) ? 0xE000 : 0), 1);
+        if (wp == VK_F11) { apply_fullscreen(!g_present.fullscreen); save_settings(); return 0; }
+        if (wp == VK_F12) {
+            g_present.scale = (g_present.scale + 1) % SCALE_COUNT;
+            layout(); save_settings(); title_until = GetTickCount() + 2000; return 0;
+        }
+        if (wp == VK_F9) { g_present.look ^= 1; save_settings(); title_until = GetTickCount() + 2000; return 0; }
+        if (!(lp & (1 << 30))) key(lp, 1);
         return 0;
     case WM_SYSKEYUP: case WM_KEYUP:
-        dos32_key(((lp >> 16) & 0xFF) | ((lp & (1 << 24)) ? 0xE000 : 0), 0);
+        if (wp == VK_F9 || wp == VK_F11 || wp == VK_F12) return 0;
+        key(lp, 0);
         return 0;
     case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_RBUTTONDOWN:
     case WM_RBUTTONUP: case WM_MBUTTONDOWN: case WM_MBUTTONUP:
@@ -108,14 +179,28 @@ void present_run(void) {
     SetProcessDPIAware();
     WNDCLASSA wc = { CS_HREDRAW | CS_VREDRAW, proc, 0, 0, GetModuleHandle(NULL), NULL,
                      LoadCursor(NULL, IDC_ARROW), NULL, NULL, "themepark" };
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     RegisterClassA(&wc);
-    RECT r = { 0, 0, 1280, 960 };
+    /* The largest 4:3 window that fits the work area at a whole multiple of 320x240. */
+    RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+    int k = 4;
+    while (k > 1 && (320 * k > wa.right - wa.left - 40 || 240 * k > wa.bottom - wa.top - 80)) k--;
+    RECT r = { 0, 0, 320 * k, 240 * k };
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    wnd = CreateWindowA("themepark", "Theme Park", WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+    wnd = CreateWindowA("themepark", "Theme Park", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                         r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
-    SetTimer(wnd, 1, 16, NULL);
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0) > 0) { TranslateMessage(&msg); DispatchMessage(&msg); }
+    ShowWindow(wnd, SW_SHOW);
+    if (g_present.fullscreen) apply_fullscreen(1);
+    for (;;) {
+        MSG msg;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) return;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        if (IsIconic(wnd)) { Sleep(50); continue; }
+        render();
+    }
 }
 
 void present_close(void) { if (wnd) PostMessage(wnd, WM_CLOSE, 0, 0); }

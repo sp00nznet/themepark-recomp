@@ -21,6 +21,7 @@ add_executable(themepark
   ${PCRECOMP}/runtime/dos32/dos32.c
   src/runtime/main.c
   src/runtime/present.c
+  src/runtime/present_d3d.c
   src/runtime/game.c)
 target_include_directories(themepark PRIVATE
   ${PCRECOMP}/runtime/recomp32 ${PCRECOMP}/runtime/dos32 src/recomp/gen src/runtime)
@@ -29,4 +30,4 @@ target_compile_definitions(themepark PRIVATE _CRT_SECURE_NO_WARNINGS RECOMP_YIEL
 # The lifted C: no warnings (there are hundreds of thousands of harmless ones),
 # and wrap-around arithmetic, as the CPU does it.
 set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
-target_link_libraries(themepark PRIVATE winmm user32 gdi32)
+target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid)

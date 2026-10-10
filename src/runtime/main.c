@@ -4,6 +4,7 @@
  *
  *   themepark.exe [--headless] [--record out.mp4] [--seconds N] [--log]
  *                 [--click T:x,y] [--key T:sc] [--game DIR] [--fps N]
+ *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
  *                 [-- game args]
  *
  * The game itself runs on a thread of its own with a large stack (each guest
@@ -136,6 +137,14 @@ int main(int argc, char** argv) {
     /* GOG's THEME.BAT passes -l3; the language number picks LANGn-0.DAT, and
      * 0 is English. --lang N picks another. */
     char args[256] = "-cC:/game/ -dC:/THEME.CD/ -l0";
+    present_load_settings();                 /* themepark.ini; the options below override it */
+    {
+        char ini[MAX_PATH], v[32];
+        GetModuleFileNameA(NULL, ini, MAX_PATH);
+        strcpy(strrchr(ini, '\\') + 1, "themepark.ini");
+        GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
+        if (v[0]) game_fps = atof(v);
+    }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;
         else if (!strcmp(argv[i], "--log")) log_on = 1;
@@ -143,6 +152,13 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--seconds") && i + 1 < argc) seconds = atof(argv[++i]);
         else if (!strcmp(argv[i], "--speed") && i + 1 < argc) dos32_speed = atof(argv[++i]);
         else if (!strcmp(argv[i], "--fps") && i + 1 < argc) game_fps = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {
+            int m = present_scale_from_name(argv[++i]);
+            if (m < 0) { fprintf(stderr, "themepark: --scale is sharp, smooth, crt, nearest or integer\n"); return 2; }
+            g_present.scale = m; }
+        else if (!strcmp(argv[i], "--fullscreen")) g_present.fullscreen = 1;
+        else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
+        else if (!strcmp(argv[i], "--vsync") && i + 1 < argc) g_present.vsync = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--lang") && i + 1 < argc) {
             char* l = strstr(args, "-l"); if (l) l[2] = argv[++i][0]; }
         else if (!strcmp(argv[i], "--click") && i + 1 < argc) add_event('c', argv[++i]);

@@ -16,7 +16,8 @@ src\recomp\gen\   (generated, gitignored)
 build\themepark.exe
    pcrecomp runtime/dos32/dos32.c   DOS/4GW, DPMI, DOS, BIOS, VGA, mouse, timer (the guest's world)
    src/runtime/main.c               options, the game thread, headless --record, scripted input
-   src/runtime/present.c            the window: picture, keyboard, mouse
+   src/runtime/present.c            the window, keyboard, mouse, themepark.ini
+   src/runtime/present_d3d.c        Direct3D 11 scaling shaders (GDI fallback in present.c)
    src/runtime/game.c               Theme Park specifics: frame pacing
 ```
 
