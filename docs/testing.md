@@ -70,7 +70,7 @@ doesn't (the test VMs).
 ## Checking the presenter with no screen
 
 ```
-build	hemepark.exe --seconds 70 <script> --present-test DIR
+build\themepark.exe --seconds 70 <script> --present-test DIR
 ```
 
 runs headless, then draws the last screen through every scaling mode with
