@@ -331,3 +331,17 @@ void sound_tick(double dt) {
         if (sound_headless && songs[k].playing && (songs[k].left -= dt * (songs[k].tempo > 0 ? songs[k].tempo : 100) / 100.0) <= 0)
             songs[k].playing = 0;
 }
+
+/* The settings menu's mute: everything silent, nothing stopped. */
+void sound_set_mute(int on) {
+    audio_master(on ? 0 : 127);
+    static int saved = -1;
+    if (on && saved < 0) { saved = midi_volume; midi_volume = 0; }
+    else if (!on && saved >= 0) { midi_volume = saved; saved = -1; }
+    if (midi) {
+        EnterCriticalSection(&midi_lock);
+        for (int c = 0; c < 16; c++)
+            midiOutShortMsg(midi, 0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
+        LeaveCriticalSection(&midi_lock);
+    }
+}

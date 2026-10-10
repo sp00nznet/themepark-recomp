@@ -6,6 +6,8 @@
  *   F9               colour: natural / vivid
  *   Ctrl+PgUp/PgDn   speed: the game's frames per second, 12 to 120 (default 25)
  *   F11, Alt+Enter   borderless fullscreen
+ *   F10, right-click on the bars   the settings menu (all of the above, mute,
+ *                    and whether parks open in 640x480)
  *
  * The picture is scaled by Direct3D 11 (present_d3d.c), or by GDI if that is
  * unavailable. Choices are kept in themepark.ini beside the exe. The game's
@@ -21,6 +23,7 @@
 
 #include "dos32.h"
 #include "present.h"
+#include "pad.h"
 
 present_settings g_present = { SCALE_SHARP, 0, 0, 1, 0 };
 
@@ -110,6 +113,7 @@ static void mouse_to_game(LPARAM lp, WPARAM wp) {
     int gx = (x - dst.left) * fw / dw, gy = (y - dst.top) * fh / dh;
     if (gx < 0) gx = 0; if (gx >= fw) gx = fw - 1;
     if (gy < 0) gy = 0; if (gy >= fh) gy = fh - 1;
+    pad_sync(gx, gy);
     dos32_mouse(gx, gy, (wp & MK_LBUTTON ? 1 : 0) | (wp & MK_RBUTTON ? 2 : 0) | (wp & MK_MBUTTON ? 4 : 0));
 }
 
@@ -127,7 +131,16 @@ static void gdi_paint(void) {
     ReleaseDC(wnd, dc);
 }
 
+static void set_speed(int fps);
+static void speed_step(int up) {
+    int n = sizeof speeds / sizeof speeds[0], k = 0;
+    while (k < n - 1 && speeds[k] < game_fps) k++;
+    k = up ? (k + 1 < n ? k + 1 : k) : (k > 0 ? k - 1 : 0);
+    set_speed(speeds[k]);
+}
+
 static void render(void) {
+    pad_poll(fw, fh, speed_step);
     int w, h;
     if (dos32_frame(frame, 1024, 768, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
     set_title();
@@ -143,6 +156,50 @@ static void key(LPARAM lp, int down) {
     dos32_key(((lp >> 16) & 0xFF) | ((lp & (1 << 24)) ? 0xE000 : 0), down);
 }
 
+void sound_set_mute(int on);           /* sound.c */
+static int muted;
+
+static void set_speed(int fps) {
+    char v[16];
+    game_fps = fps;
+    snprintf(v, sizeof v, "%d", fps);
+    WritePrivateProfileStringA("game", "fps", v, ini_path);
+    title_until = GetTickCount() + 2000;
+}
+
+/* F10, or a right-click on the bars: every setting in one native menu. */
+static void settings_menu(int sx, int sy) {
+    enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES };
+    static const char* scale_labels[SCALE_COUNT] = {
+        "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (square pixels)" };
+    HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu();
+    for (int i = 0; i < SCALE_COUNT; i++)
+        AppendMenuA(sc, MF_STRING | (g_present.scale == i ? MF_CHECKED : 0), ID_SCALE + i, scale_labels[i]);
+    for (int k = 0; k < (int)(sizeof speeds / sizeof speeds[0]); k++) {
+        char t[48];
+        snprintf(t, sizeof t, "%d fps%s", speeds[k], speeds[k] == 25 ? " (original)" : "");
+        AppendMenuA(sp, MF_STRING | ((int)game_fps == speeds[k] ? MF_CHECKED : 0), ID_SPEED + k, t);
+    }
+    char ini_hires[8];
+    GetPrivateProfileStringA("game", "hires", "1", ini_hires, sizeof ini_hires, ini_path);
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)sc, "Scaling\tF12");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)sp, "Speed\tCtrl+PgUp/PgDn");
+    AppendMenuA(m, MF_STRING | (g_present.look ? MF_CHECKED : 0), ID_VIVID, "Vivid colour\tF9");
+    AppendMenuA(m, MF_STRING | (g_present.fullscreen ? MF_CHECKED : 0), ID_FULL, "Fullscreen\tF11");
+    AppendMenuA(m, MF_STRING | (muted ? MF_CHECKED : 0), ID_MUTE, "Mute");
+    AppendMenuA(m, MF_STRING | (ini_hires[0] != '0' ? MF_CHECKED : 0), ID_HIRES,
+                "Open parks in 640x480 (R switches in a park)");
+    int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
+    DestroyMenu(m);
+    if (cmd >= ID_SCALE && cmd < ID_SCALE + SCALE_COUNT) { g_present.scale = cmd - ID_SCALE; layout(); }
+    else if (cmd >= ID_SPEED && cmd < ID_VIVID) set_speed(speeds[cmd - ID_SPEED]);
+    else if (cmd == ID_VIVID) g_present.look ^= 1;
+    else if (cmd == ID_FULL) apply_fullscreen(!g_present.fullscreen);
+    else if (cmd == ID_MUTE) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
+    else if (cmd == ID_HIRES) WritePrivateProfileStringA("game", "hires", ini_hires[0] != '0' ? "0" : "1", ini_path);
+    if (cmd) { save_settings(); title_until = GetTickCount() + 2000; }
+}
+
 static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     switch (m) {
     case WM_SIZE: cw = LOWORD(lp); ch = HIWORD(lp); layout(); return 0;
@@ -150,7 +207,12 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     case WM_PAINT: ValidateRect(h, NULL); return 0;
     case WM_SYSKEYDOWN:
         if (wp == VK_RETURN && (lp & (1 << 29))) { apply_fullscreen(!g_present.fullscreen); save_settings(); return 0; }
-        if (wp == VK_F10) return 0;       /* F10 would open the system menu */
+        if (wp == VK_F10) {               /* F10 is ours: the settings menu, not the system menu */
+            POINT p = { (dst.left + dst.right) / 2, (dst.top + dst.bottom) / 2 };
+            ClientToScreen(h, &p);
+            settings_menu(p.x, p.y);
+            return 0;
+        }
         /* fall through: Alt is a game key */
     case WM_KEYDOWN:
         if (wp == VK_F11) { apply_fullscreen(!g_present.fullscreen); save_settings(); return 0; }
@@ -160,13 +222,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         }
         if (wp == VK_F9) { g_present.look ^= 1; save_settings(); title_until = GetTickCount() + 2000; return 0; }
         if ((wp == VK_PRIOR || wp == VK_NEXT) && GetKeyState(VK_CONTROL) < 0) {   /* speed */
-            int n = sizeof speeds / sizeof speeds[0], k = 0;
-            while (k < n - 1 && speeds[k] < game_fps) k++;
-            k = wp == VK_PRIOR ? (k + 1 < n ? k + 1 : k) : (k > 0 ? k - 1 : 0);
-            game_fps = speeds[k];
-            char v[16]; snprintf(v, sizeof v, "%d", speeds[k]);
-            WritePrivateProfileStringA("game", "fps", v, ini_path);
-            title_until = GetTickCount() + 2000;
+            speed_step(wp == VK_PRIOR);
             return 0;
         }
         if (!(lp & (1 << 30))) key(lp, 1);
@@ -175,7 +231,11 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         if (wp == VK_F9 || wp == VK_F11 || wp == VK_F12) return 0;
         key(lp, 0);
         return 0;
-    case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_RBUTTONDOWN:
+    case WM_RBUTTONDOWN: {               /* on the bars: the settings menu */
+        POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (!PtInRect(&dst, p)) { ClientToScreen(h, &p); settings_menu(p.x, p.y); return 0; }
+        } /* fall through: inside the picture it is the game's */
+    case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP:
     case WM_RBUTTONUP: case WM_MBUTTONDOWN: case WM_MBUTTONUP:
         if (m == WM_LBUTTONDOWN || m == WM_RBUTTONDOWN) SetCapture(h);
         if (m == WM_LBUTTONUP || m == WM_RBUTTONUP) ReleaseCapture();
@@ -205,6 +265,7 @@ void present_run(void) {
                         r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
     ShowWindow(wnd, SW_SHOW);
     if (g_present.fullscreen) apply_fullscreen(1);
+    if ((muted = GetPrivateProfileIntA("sound", "mute", 0, ini_path))) sound_set_mute(1);
     for (;;) {
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {

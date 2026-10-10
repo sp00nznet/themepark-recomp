@@ -14,6 +14,9 @@ versions follow [SemVer](https://semver.org/).
   (needs pcrecomp#70).
 
 ### Added
+- Settings menu on F10 or a right-click on the bars: scaling, colour, speed,
+  fullscreen, mute and whether parks open in 640x480.
+- Xbox controller (XInput, loaded at run time) as the mouse and keys.
 - Parks open in the game's own 640x480 SVGA mode (it shipped behind the R
   key); `--lowres` / `[game] hires=0` for the original default.
 - Speed control: Ctrl+PgUp / Ctrl+PgDn steps the game from 12 to 120 frames

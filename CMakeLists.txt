@@ -24,7 +24,8 @@ add_executable(themepark
   src/runtime/present_d3d.c
   src/runtime/game.c
   src/runtime/audio.c
-  src/runtime/sound.c)
+  src/runtime/sound.c
+  src/runtime/pad.c)
 target_include_directories(themepark PRIVATE
   ${PCRECOMP}/runtime/recomp32 ${PCRECOMP}/runtime/dos32 src/recomp/gen src/runtime)
 target_compile_definitions(themepark PRIVATE _CRT_SECURE_NO_WARNINGS RECOMP_YIELD_EVERY=256u)

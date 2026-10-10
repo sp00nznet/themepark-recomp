@@ -18,6 +18,7 @@ build\themepark.exe
    src/runtime/main.c               options, the game thread, headless --record, scripted input
    src/runtime/present.c            the window, keyboard, mouse, themepark.ini
    src/runtime/present_d3d.c        Direct3D 11 scaling shaders (GDI fallback in present.c)
+   src/runtime/pad.c                an Xbox controller as the mouse and keys
    src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back
    src/runtime/sound.c              HMI SOS replaced: effects and music (docs/sound.md)
    src/runtime/audio.c              the effects mixer on waveOut
