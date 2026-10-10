@@ -4,6 +4,7 @@
  *
  *   F12              scaling: sharp-bilinear (default), smooth, CRT, nearest, integer
  *   F9               colour: natural / vivid
+ *   Ctrl+PgUp/PgDn   speed: the game's frames per second, 12 to 120 (default 25)
  *   F11, Alt+Enter   borderless fullscreen
  *
  * The picture is scaled by Direct3D 11 (present_d3d.c), or by GDI if that is
@@ -32,6 +33,8 @@ static RECT dst;                 /* where the picture lands in the client area *
 static int cw, ch;
 static WINDOWPLACEMENT saved_place = { sizeof saved_place };
 static DWORD title_until;        /* show the scaling mode in the title for a moment */
+extern double game_fps;          /* game.c: the speed control */
+static const int speeds[] = { 12, 15, 20, 25, 30, 35, 40, 50, 60, 90, 120 };
 
 int present_scale_from_name(const char* name) {
     for (int i = 0; i < SCALE_COUNT; i++) if (!_stricmp(name, scale_names[i])) return i;
@@ -75,7 +78,8 @@ static void layout(void) {
 static void set_title(void) {
     char t[128];
     if (GetTickCount() < title_until)
-        snprintf(t, sizeof t, "Theme Park - %s%s", scale_names[g_present.scale], g_present.look ? ", vivid" : "");
+        snprintf(t, sizeof t, "Theme Park - %s%s - speed %.0f fps", scale_names[g_present.scale],
+                 g_present.look ? ", vivid" : "", game_fps);
     else
         snprintf(t, sizeof t, "Theme Park");
     SetWindowTextA(wnd, t);
@@ -155,6 +159,16 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
             layout(); save_settings(); title_until = GetTickCount() + 2000; return 0;
         }
         if (wp == VK_F9) { g_present.look ^= 1; save_settings(); title_until = GetTickCount() + 2000; return 0; }
+        if ((wp == VK_PRIOR || wp == VK_NEXT) && GetKeyState(VK_CONTROL) < 0) {   /* speed */
+            int n = sizeof speeds / sizeof speeds[0], k = 0;
+            while (k < n - 1 && speeds[k] < game_fps) k++;
+            k = wp == VK_PRIOR ? (k + 1 < n ? k + 1 : k) : (k > 0 ? k - 1 : 0);
+            game_fps = speeds[k];
+            char v[16]; snprintf(v, sizeof v, "%d", speeds[k]);
+            WritePrivateProfileStringA("game", "fps", v, ini_path);
+            title_until = GetTickCount() + 2000;
+            return 0;
+        }
         if (!(lp & (1 << 30))) key(lp, 1);
         return 0;
     case WM_SYSKEYUP: case WM_KEYUP:

@@ -25,7 +25,7 @@ not done.
 | Name prompt, main menu, setup screens, world map | works |
 | Park simulation (calendar, visitors, money) | runs; long play untested |
 | Keyboard and mouse | work |
-| 640x480 SVGA mode | untested |
+| 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
 | Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
 | Music | the game's General MIDI songs on the Windows synth |
 | Saving and loading | untested |
@@ -43,6 +43,7 @@ Real output of the recompiled game.
 | ![Title](docs/screenshots/title.png) | ![Attract demo](docs/screenshots/attract-park.png) |
 | ![Main menu](docs/screenshots/main-menu.png) | ![World map](docs/screenshots/world-map.png) |
 | ![Buying land](docs/screenshots/buy-land.png) | ![A new park](docs/screenshots/new-park.png) |
+| ![The park in 640x480](docs/screenshots/hires-park.png) | |
 
 ## Getting Started
 
@@ -109,7 +110,8 @@ build; a pcrecomp checkout older than the DOS host stops the configure with
 
 ```
 themepark.exe                       play in a window: F12 scaling, F9 vivid colour, F11 / Alt+Enter fullscreen
-themepark.exe --fps 35              the game's speed: frames per second (default 25)
+themepark.exe --fps 35              the game's speed: frames per second (default 25; Ctrl+PgUp/PgDn in game)
+themepark.exe --lowres              parks in 320x200, as the original started (R toggles either way)
 themepark.exe --scale crt           scaling: sharp (default), smooth, crt, nearest, integer
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
 themepark.exe --mute                no sound
@@ -121,7 +123,7 @@ themepark.exe --headless --seconds 90 --click 10:160,100 --key 13:14 ...
 ```
 
 Display choices are remembered in `themepark.ini` beside the exe (`[display]
-scale`, `vivid`, `fullscreen`, `vsync`; `[game] fps`).
+scale`, `vivid`, `fullscreen`, `vsync`; `[game] fps`, `hires`).
 
 Headless runs keep their own clock, so the same script gives the same run every
 time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,

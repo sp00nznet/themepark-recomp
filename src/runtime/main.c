@@ -36,6 +36,7 @@ static double seconds;
 static const char* record_path;
 static volatile int exit_code = -1;
 static const char* present_dir;   /* --present-test */
+static int start_hires = 1;       /* --lowres, [game] hires=0: the original's default */
 
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
  * of guest time, game pixels, a set-1 scancode in hex). Each fires once at
@@ -53,6 +54,7 @@ static void add_event(int kind, const char* spec) {
     if (kind == 'c' && sscanf(spec, "%lf:%d,%d", &t, &a, &b) != 3) return;
     if (kind == 'k' && sscanf(spec, "%lf:%x", &t, &a) != 2) return;
     if (kind == 'f' && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
+    if (kind == 'p' && sscanf(spec, "%lf:%x=%x", &t, &a, &b) != 3) return;
     if (kind == 'd') { if (sscanf(spec, "%lf:", &t) != 1 || ndump >= 8) return;
                        snprintf(dump_path[ndump], MAX_PATH, "%s", strchr(spec, ':') + 1); a = ndump++; }
     evs[nev].frame = (long)(t * 70); evs[nev].kind = kind; evs[nev].a = a; evs[nev].b = b; nev++;
@@ -70,6 +72,8 @@ static void run_events(void) {
                 FILE* d = fopen(dump_path[evs[i].a], "wb");
                 if (d) { fwrite(dos32_mem(0x400000), 1, 0x4000000, d); fclose(d); }
             }
+        } else if (evs[i].kind == 'p') {          /* --poke: a guest byte */
+            if (f == frame_no) *dos32_mem((uint32_t)evs[i].a) = (uint8_t)evs[i].b;
         } else if (evs[i].kind == 'f') {
             if (f == frame_no) game_fps = evs[i].a;
         } else if (evs[i].kind == 'k') {
@@ -92,6 +96,10 @@ static int nwatch;
 static void on_retrace(void) {
     static int tick;
     frame_no++;
+    /* The park in the game's own 640x480 mode: the flag its resolution toggle
+     * (R) keeps, set before the first park, so the game switches itself the
+     * first time a park opens. Menus stay 320x200, as the game draws them. */
+    if (frame_no == 1 && start_hires) *dos32_mem(0x4A1510) = 1;
     run_events();
     for (int i = 0; i < nwatch; i++) {     /* --watch: log a guest word when it changes */
         uint16_t v = *(uint16_t*)dos32_mem(watch[i]);
@@ -180,6 +188,7 @@ int main(int argc, char** argv) {
         strcpy(strrchr(ini, '\\') + 1, "themepark.ini");
         GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
         if (v[0]) game_fps = atof(v);
+        start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
     }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;
@@ -195,6 +204,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--fullscreen")) g_present.fullscreen = 1;
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
         else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
+        else if (!strcmp(argv[i], "--lowres")) start_hires = 0;
+        else if (!strcmp(argv[i], "--hires")) start_hires = 1;
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) { wav = open_wav(argv[++i]); }
         else if (!strcmp(argv[i], "--present-test") && i + 1 < argc) { present_dir = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--vsync") && i + 1 < argc) g_present.vsync = atoi(argv[++i]);
@@ -204,6 +215,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--key") && i + 1 < argc) add_event('k', argv[++i]);
         else if (!strcmp(argv[i], "--fps-at") && i + 1 < argc) add_event('f', argv[++i]);
         else if (!strcmp(argv[i], "--dump") && i + 1 < argc) add_event('d', argv[++i]);
+        else if (!strcmp(argv[i], "--poke") && i + 1 < argc) add_event('p', argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc && nwatch < 8) watch[nwatch++] = strtoul(argv[++i], NULL, 16);
         else if (!strcmp(argv[i], "--game") && i + 1 < argc) snprintf(root, sizeof root, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--")) {

@@ -6,11 +6,18 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- 640x480 drew no rides, buildings or people: lift32 made 16-bit `sar` a
+  logical shift, and the game halves its sprite offsets with it (needs
+  pcrecomp#72).
 - Sound init never ran: the game's memory manager took every block and the
   C library could not open SNDSETUP.INF; 1 MB is held back while it grabs
   (needs pcrecomp#70).
 
 ### Added
+- Parks open in the game's own 640x480 SVGA mode (it shipped behind the R
+  key); `--lowres` / `[game] hires=0` for the original default.
+- Speed control: Ctrl+PgUp / Ctrl+PgDn steps the game from 12 to 120 frames
+  per second, shown in the title bar and remembered.
 - Sound: HMI SOS replaced at its API (docs/sound.md). Effects from the 44.1 kHz
   16-bit bank through a host mixer on waveOut; the game's General MIDI songs
   through a host HMP sequencer on the Windows synth. `--mute`; headless
