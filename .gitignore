@@ -1,0 +1,22 @@
+# Game data: the user's own GOG install, never distributed
+game/
+*.exe
+*.EXE
+*.386
+*.DAT
+setup_theme_park_*
+
+# Lifted output: derived from the game binary, never distributed
+src/recomp/gen/
+analysis/*.json
+
+# Builds and scratch
+build/
+build-*/
+work/
+__pycache__/
+*.mp4
+stdout.txt
+stderr.txt
+setup.log
+Theme Park (recomp).cmd
