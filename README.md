@@ -10,6 +10,41 @@ Part of the [pcrecomp](https://github.com/sp00nznet/pcrecomp) family, and built
 in its shared house style: the same pipeline, CLI flags, headless recording and
 conformance harness as the other recomp repos.
 
+## Features
+
+What this adds to the 1994 DOS game, beyond running it natively:
+
+- **640x480 parks by default.** The game shipped a hi-res SVGA park view hidden
+  behind the R key. It now opens there, and a lifter bug that made it draw
+  no rides, buildings or people is fixed (pcrecomp#72). `--lowres` gives the
+  original 320x200.
+- **Pixels doubled up.** Integer scaling, with window sizes of 1x, 2x or 3x
+  the park's 640x480 and borderless fullscreen. Other scaling modes are
+  sharp-bilinear, smooth, CRT and nearest, plus a vivid-colour option, all
+  drawn with Direct3D 11.
+- **Save states.** Nine slots in the settings menu that keep the whole park.
+  A state saved in one session loads in a later one (pcrecomp#77).
+- **A settings menu (F10).** Save states, window size, scaling, colour, speed,
+  fullscreen, mute and the 640x480 default, without remembering hotkeys. The
+  choices are kept in `themepark.ini`.
+- **Speed control.** The DOS game had no frame limiter, so it ran as fast as
+  the PC could and its timers raced. It is now paced at 25 fps, my best guess
+  at the original speed, and Ctrl+PgUp/PgDn picks 12 to 120.
+- **A modern mouse.** It is captured in the window and moves at your Windows
+  pointer speed. Pushing past an edge scrolls the park, as it did on DOS
+  (pcrecomp#76). Held keys repeat, so the arrow keys scroll smoothly.
+- **Sound without a Sound Blaster.** The effects play from the 44.1 kHz 16-bit
+  bank through a host mixer, and the General MIDI score plays on the Windows
+  synth. The game's own sound logic is untouched; only the HMI driver layer
+  beneath it is replaced.
+- **Xbox controller.** The left stick moves the pointer, A and B are the
+  buttons, the D-pad scrolls and the bumpers set the speed.
+- **Mods.** `--mod NAME` lays `mods\NAME` over the game's files without
+  touching them.
+- **One-click setup** from your GOG install or GOG's offline installer.
+- **Headless runs** for testing: scripted input, `--record` to video with
+  sound, save and load on cue, and a conformance check.
+
 ## Status
 
 **v0.1.0 — alpha.** The whole game is lifted (6,517 functions, no lift errors)
