@@ -32,6 +32,7 @@ static int headless, log_on;
 static double seconds;
 static const char* record_path;
 static volatile int exit_code = -1;
+static const char* present_dir;   /* --present-test */
 
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
  * of guest time, game pixels, a set-1 scancode in hex). Each fires once at
@@ -158,6 +159,7 @@ int main(int argc, char** argv) {
             g_present.scale = m; }
         else if (!strcmp(argv[i], "--fullscreen")) g_present.fullscreen = 1;
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
+        else if (!strcmp(argv[i], "--present-test") && i + 1 < argc) { present_dir = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--vsync") && i + 1 < argc) g_present.vsync = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--lang") && i + 1 < argc) {
             char* l = strstr(args, "-l"); if (l) l[2] = argv[++i][0]; }
@@ -203,7 +205,10 @@ int main(int argc, char** argv) {
     if (seconds > 0 && !dos32_virtual_clock)   /* a hung program still stops */
         CloseHandle(CreateThread(NULL, 0, timeout_thread, NULL, 0, NULL));
     HANDLE t = CreateThread(NULL, 256u << 20, game_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    if (headless) WaitForSingleObject(t, INFINITE);
+    if (headless) {
+        WaitForSingleObject(t, INFINITE);
+        if (present_dir) return present_test(present_dir);   /* the run's last screen, every mode */
+    }
     else {
         present_run();          /* returns when the window closes */
         dos32_quit = 1;

@@ -147,6 +147,37 @@ static int init(HWND hw) {
     return 1;
 }
 
+/* --present-test: the back buffer as drawn, read back and written as a BMP,
+ * so the shaders can be checked with no screen to look at. */
+const char* snapshot_path;
+static void snapshot(void) {
+    ID3D11Texture2D* back = NULL;
+    IDXGISwapChain_GetBuffer(d.sc, 0, &IID_ID3D11Texture2D, (void**)&back);
+    D3D11_TEXTURE2D_DESC td;
+    ID3D11Texture2D_GetDesc(back, &td);
+    td.Usage = D3D11_USAGE_STAGING; td.BindFlags = 0; td.CPUAccessFlags = D3D11_CPU_ACCESS_READ; td.MiscFlags = 0;
+    ID3D11Texture2D* st = NULL;
+    if (SUCCEEDED(ID3D11Device_CreateTexture2D(d.dev, &td, NULL, &st))) {
+        ID3D11DeviceContext_CopyResource(d.ctx, (ID3D11Resource*)st, (ID3D11Resource*)back);
+        D3D11_MAPPED_SUBRESOURCE m;
+        if (SUCCEEDED(ID3D11DeviceContext_Map(d.ctx, (ID3D11Resource*)st, 0, D3D11_MAP_READ, 0, &m))) {
+            FILE* f = fopen(snapshot_path, "wb");
+            if (f) {
+                BITMAPFILEHEADER fh = { 0x4D42, 0, 0, 0, sizeof fh + sizeof(BITMAPINFOHEADER) };
+                BITMAPINFOHEADER ih = { sizeof ih, (LONG)td.Width, -(LONG)td.Height, 1, 32, BI_RGB };
+                fh.bfSize = fh.bfOffBits + td.Width * td.Height * 4;
+                fwrite(&fh, sizeof fh, 1, f); fwrite(&ih, sizeof ih, 1, f);
+                for (UINT y = 0; y < td.Height; y++) fwrite((uint8_t*)m.pData + y * m.RowPitch, 4, td.Width, f);
+                fclose(f);
+            }
+            ID3D11DeviceContext_Unmap(d.ctx, (ID3D11Resource*)st, 0);
+        }
+        ID3D11Texture2D_Release(st);
+    }
+    ID3D11Texture2D_Release(back);
+    snapshot_path = NULL;
+}
+
 int d3d_present(HWND hw, const uint32_t* px, int w, int h, const RECT* r, int cw, int ch,
                 int mode, int look, int vsync) {
     if (d.failed) return 0;
@@ -195,6 +226,7 @@ int d3d_present(HWND hw, const uint32_t* px, int w, int h, const RECT* r, int cw
     ID3D11DeviceContext_PSSetSamplers(d.ctx, 0, 2, d.samp);
     ID3D11DeviceContext_PSSetConstantBuffers(d.ctx, 0, 1, &d.cb);
     ID3D11DeviceContext_Draw(d.ctx, 3, 0);
+    if (snapshot_path) snapshot();
     IDXGISwapChain_Present(d.sc, vsync ? 1 : 0, 0);
     return 1;
 }

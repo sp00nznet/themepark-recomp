@@ -23,6 +23,10 @@ int  present_scale_from_name(const char* name);   /* -1 if unknown */
 /* Open the window and run its loop until it closes. */
 void present_run(void);
 
+/* Render the current screen through every scaling mode into DIR/<mode>.bmp
+ * with Direct3D and no visible window. Returns the number that failed. */
+int present_test(const char* dir);
+
 /* Close the window from another thread (the game exited). */
 void present_close(void);
 

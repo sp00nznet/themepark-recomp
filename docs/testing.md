@@ -67,6 +67,17 @@ builds on the farm (x64 clang-cl) and runs `tools\qa.cmd`, which is the
 conformance script where `game\` exists and `SKIP: no game data` where it
 doesn't (the test VMs).
 
+## Checking the presenter with no screen
+
+```
+build	hemepark.exe --seconds 70 <script> --present-test DIR
+```
+
+runs headless, then draws the last screen through every scaling mode with
+Direct3D into a hidden 1440x1080 window and writes each back buffer to
+`DIR\<mode>.bmp`. It exits non-zero if Direct3D could not draw. This is how
+the shaders are checked when no display can be filmed.
+
 ## Windowed runs
 
 At the console, run windowed builds on a virtual monitor so they never land on

@@ -204,3 +204,27 @@ void present_run(void) {
 }
 
 void present_close(void) { if (wnd) PostMessage(wnd, WM_CLOSE, 0, 0); }
+
+/* --present-test DIR: one frame through each scaling mode into a hidden
+ * 1440x1080 window, each read back to DIR/<mode>.bmp. Returns 0 when Direct3D
+ * drew all of them. */
+extern const char* snapshot_path;
+int present_test(const char* dir) {
+    WNDCLASSA wc = { 0, DefWindowProcA, 0, 0, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, "tp_test" };
+    RegisterClassA(&wc);
+    wnd = CreateWindowA("tp_test", "", WS_POPUP, 0, 0, 1440, 1080, NULL, NULL, wc.hInstance, NULL);
+    cw = 1440; ch = 1080;
+    int w, h, bad = 0;
+    if (dos32_frame(frame, 1024, 768, &w, &h)) { fw = w; fh = h; }
+    for (int m = 0; m < SCALE_COUNT; m++) {
+        char path[MAX_PATH];
+        snprintf(path, sizeof path, "%s\\%s.bmp", dir, scale_names[m]);
+        g_present.scale = m;
+        layout();
+        snapshot_path = path;
+        if (!d3d_present(wnd, frame, fw, fh, &dst, cw, ch, m, 0, 0)) bad++;
+        else fprintf(stderr, "present-test: %s\n", path);
+    }
+    DestroyWindow(wnd);
+    return bad;
+}
