@@ -32,7 +32,7 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 | Music | the game's General MIDI songs on the Windows synth |
 | Save states | 9 slots in the settings menu (F10) |
 | The game's own saves | untested |
-| Own presenter | Direct3D 11: sharp-bilinear, smooth, CRT, nearest, integer (F12), vivid colour (F9), borderless fullscreen (F11); GDI fallback |
+| Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
 main menu, park calendar running, no faults, no unresolved dispatches.
@@ -117,7 +117,7 @@ themepark.exe                       play in a window: F10 for the settings menu 
                                     F11 / Alt+Enter fullscreen
 themepark.exe --fps 35              the game's speed: frames per second (default 25; Ctrl+PgUp/PgDn in game)
 themepark.exe --lowres              parks in 320x200, as the original started (R toggles either way)
-themepark.exe --scale crt           scaling: sharp (default), smooth, crt, nearest, integer
+themepark.exe --scale crt           scaling: integer (default), sharp, smooth, crt, nearest
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
 themepark.exe --mute                no sound
 themepark.exe --mod NAME            play with mods\NAME laid over the game's files (mods/README.md)

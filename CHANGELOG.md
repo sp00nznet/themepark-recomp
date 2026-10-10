@@ -11,6 +11,8 @@ versions follow [SemVer](https://semver.org/).
   how far the mouse moved from where it last put its cursor, and the host fed
   it the window position. The window now captures the mouse and sends raw
   motion (needs pcrecomp#76).
+- The captured mouse moved slower than the Windows pointer: it now follows
+  the pointer's own speed and acceleration (raw input had neither).
 - Holding an arrow key scrolled one step: key repeats now reach the game, as a
   PC keyboard sends them.
 - 640x480 drew no rides, buildings or people: lift32 made 16-bit `sar` a
@@ -24,8 +26,9 @@ versions follow [SemVer](https://semver.org/).
 - Save states: 9 slots in the settings menu, about 8 MB each, loading in a
   park in the same session or a later one (needs pcrecomp#77). `--save` and
   `--load` for scripted runs.
-- Window size in the settings menu: whole multiples of 320x240 that fit the
-  screen, remembered.
+- Pixels doubled up by default: integer scaling (nearest, whole multiples)
+  in a window of 1x, 2x or 3x the park's 640x480, picked in the settings menu
+  and remembered; the largest that fits to start (2x on a 1080p screen).
 - `--move T:dx,dy` (relative mouse motion) for scripted runs; `TP_SNDLOG=1`
   logs the game's sound calls.
 - Mods: `--mod NAME` lays `mods\NAME` over the game's files (needs

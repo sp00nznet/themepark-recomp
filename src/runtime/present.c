@@ -2,7 +2,7 @@
  * The window: dos32's screen through our own presenter, and the player's keys
  * and mouse handed back to the game.
  *
- *   F12              scaling: sharp-bilinear (default), smooth, CRT, nearest, integer
+ *   F12              scaling: integer (default: pixels doubled up), sharp-bilinear, smooth, CRT, nearest
  *   F9               colour: natural / vivid
  *   Ctrl+PgUp/PgDn   speed: the game's frames per second, 12 to 120 (default 25)
  *   F11, Alt+Enter   borderless fullscreen
@@ -28,7 +28,7 @@
 #include "present.h"
 #include "pad.h"
 
-present_settings g_present = { SCALE_SHARP, 0, 0, 1, 0 };
+present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
 static const char* scale_names[SCALE_COUNT] = { "sharp", "smooth", "crt", "nearest", "integer" };
 static char ini_path[MAX_PATH];
@@ -58,9 +58,9 @@ void present_load_settings(void) {
     char buf[64];
     GetModuleFileNameA(NULL, ini_path, MAX_PATH);
     strcpy(strrchr(ini_path, '\\') + 1, "themepark.ini");
-    GetPrivateProfileStringA("display", "scale", "sharp", buf, sizeof buf, ini_path);
+    GetPrivateProfileStringA("display", "scale", "integer", buf, sizeof buf, ini_path);
     int s = present_scale_from_name(buf);
-    g_present.scale = s < 0 ? SCALE_SHARP : s;
+    g_present.scale = s < 0 ? SCALE_INTEGER : s;
     g_present.look = GetPrivateProfileIntA("display", "vivid", 0, ini_path);
     g_present.fullscreen = GetPrivateProfileIntA("display", "fullscreen", 0, ini_path);
     g_present.vsync = GetPrivateProfileIntA("display", "vsync", 1, ini_path);
@@ -126,10 +126,13 @@ static void apply_fullscreen(int on) {
 
 /* The mouse is captured while the window has it: clicking into the picture
  * takes it, and losing focus (Alt+Tab, the Windows key) or the settings menu
- * gives it back. Captured, the pointer is held inside the picture and its raw
- * motion goes to the game as a real mouse's would: the game moves its own
- * cursor by how far the mouse went, and scrolls the park when that pushes past
- * the edge of the screen. */
+ * gives it back. Captured, the Windows pointer (hidden, with the player's own
+ * speed and acceleration) is held inside the picture and its motion goes to the
+ * game as a real mouse's would: the game moves its own cursor by how far the
+ * mouse went, and scrolls the park when that pushes past the edge of the
+ * screen. The pointer is put back in the middle before it reaches an edge, so
+ * motion past the edge still counts. */
+static POINT last;               /* where the pointer was, client pixels */
 
 static void clip(void) {
     RECT r = dst;
@@ -140,20 +143,23 @@ static void clip(void) {
 static void capture(int on) {
     if (on == captured) return;
     captured = on;
-    if (on) { clip(); hint_until = GetTickCount() + 4000; }
+    if (on) { clip(); GetCursorPos(&last); ScreenToClient(wnd, &last); hint_until = GetTickCount() + 4000; }
     else { ClipCursor(NULL); buttons = 0; dos32_mouse_move(0, 0, 0); }
     title_until = 0;
 }
 
-static void raw_motion(LPARAM lp) {
-    RAWINPUT ri;
-    UINT n = sizeof ri;
+static void pointer_moved(int x, int y) {
     int dw = dst.right - dst.left, dh = dst.bottom - dst.top;
-    if (GetRawInputData((HRAWINPUT)lp, RID_INPUT, &ri, &n, sizeof(RAWINPUTHEADER)) == (UINT)-1 ||
-        ri.header.dwType != RIM_TYPEMOUSE || (ri.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) || dw <= 0 || dh <= 0)
-        return;
-    if (ri.data.mouse.lLastX || ri.data.mouse.lLastY)
-        dos32_mouse_move((double)ri.data.mouse.lLastX * fw / dw, (double)ri.data.mouse.lLastY * fh / dh, buttons);
+    if (dw <= 0 || dh <= 0) return;
+    if (x != last.x || y != last.y)
+        dos32_mouse_move((double)(x - last.x) * fw / dw, (double)(y - last.y) * fh / dh, buttons);
+    last.x = x; last.y = y;
+    if (x < dst.left + dw / 4 || x >= dst.right - dw / 4 || y < dst.top + dh / 4 || y >= dst.bottom - dh / 4) {
+        POINT c = { (dst.left + dst.right) / 2, (dst.top + dst.bottom) / 2 };
+        last = c;                    /* the move SetCursorPos makes is then no motion */
+        ClientToScreen(wnd, &c);
+        SetCursorPos(c.x, c.y);
+    }
 }
 
 /* GDI: the fallback when Direct3D 11 is unavailable. */
@@ -206,7 +212,8 @@ static void set_speed(int fps) {
     title_until = GetTickCount() + 2000;
 }
 
-/* Window sizes: whole multiples of 320x240 that fit the work area. */
+/* Window sizes, in 320x240 steps (k); the menu offers the even ones, whole
+ * multiples of the park's 640x480: 1x, 2x, 3x, each pixel doubled up. */
 static int max_window_k(void) {
     RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
     int k = 8;
@@ -240,13 +247,13 @@ static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
            ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600 };
     static const char* scale_labels[SCALE_COUNT] = {
-        "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (square pixels)" };
+        "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
     HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
           sv = CreatePopupMenu(), ld = CreatePopupMenu();
-    for (int k = 2; k <= max_window_k(); k++) {
+    for (int k = 2; k <= max_window_k(); k += 2) {
         char t[48];
-        snprintf(t, sizeof t, "%d x %d", 320 * k, 240 * k);
+        snprintf(t, sizeof t, "%dx\t%d x %d", k / 2, 320 * k, 240 * k);
         AppendMenuA(sz, MF_STRING | (!g_present.fullscreen && cw == 320 * k && ch == 240 * k ? MF_CHECKED : 0), ID_SIZE + k, t);
     }
     for (int slot = 1; slot <= 9; slot++) {
@@ -321,9 +328,9 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         if (wp == VK_F9 || wp == VK_F11 || wp == VK_F12) return 0;
         key(lp, 0);
         return 0;
-    case WM_INPUT:
-        if (captured) raw_motion(lp);
-        break;
+    case WM_MOUSEMOVE:
+        if (captured) pointer_moved(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+        return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) capture(0);
         break;
@@ -356,16 +363,14 @@ void present_run(void) {
                      LoadCursor(NULL, IDC_ARROW), NULL, NULL, "themepark" };
     wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     RegisterClassA(&wc);
-    /* The size chosen in the menu, else the largest multiple of 320x240 up
-     * to 1280x960 that fits the work area. */
+    /* The size chosen in the menu, else the largest whole multiple of
+     * 640x480 that fits the work area (2x, 1280x960, on a 1080p screen). */
     int k = GetPrivateProfileIntA("display", "window", 0, ini_path), most = max_window_k();
-    if (k < 1 || k > most) k = most < 4 ? most : 4;
+    if (k < 1 || k > most) k = most >= 2 ? most & ~1 : most;
     RECT r = { 0, 0, 320 * k, 240 * k };
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
     wnd = CreateWindowA("themepark", "Theme Park", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                         r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
-    RAWINPUTDEVICE mouse_dev = { 1, 2, 0, wnd };   /* generic desktop, mouse */
-    RegisterRawInputDevices(&mouse_dev, 1, sizeof mouse_dev);
     ShowWindow(wnd, SW_SHOW);
     if (g_present.fullscreen) apply_fullscreen(1);
     if ((muted = GetPrivateProfileIntA("sound", "mute", 0, ini_path))) sound_set_mute(1);
