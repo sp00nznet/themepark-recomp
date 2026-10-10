@@ -217,7 +217,11 @@ static void set_speed(int fps) {
 static int max_window_k(void) {
     RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
     int k = 8;
-    while (k > 1 && (320 * k > wa.right - wa.left - 40 || 240 * k > wa.bottom - wa.top - 80)) k--;
+    for (; k > 1; k--) {             /* the whole window, title bar and borders too */
+        RECT r = { 0, 0, 320 * k, 240 * k };
+        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+        if (r.right - r.left <= wa.right - wa.left && r.bottom - r.top <= wa.bottom - wa.top) break;
+    }
     return k;
 }
 
@@ -226,7 +230,10 @@ static void size_window(int k) {
     if (g_present.fullscreen) apply_fullscreen(0);
     ShowWindow(wnd, SW_RESTORE);
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    SetWindowPos(wnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
+    RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);   /* centred, so all of it is on screen */
+    SetWindowPos(wnd, NULL, wa.left + (wa.right - wa.left - (r.right - r.left)) / 2,
+                 wa.top + (wa.bottom - wa.top - (r.bottom - r.top)) / 2,
+                 r.right - r.left, r.bottom - r.top, SWP_NOZORDER);
 }
 
 /* A save state slot's line in the menu: when it was saved, or empty. */
@@ -271,6 +278,10 @@ static void settings_menu(int sx, int sy) {
     }
     char ini_hires[8];
     GetPrivateProfileStringA("game", "hires", "1", ini_hires, sizeof ini_hires, ini_path);
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)sv, "Save state");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)ld, "Load state");
+    AppendMenuA(m, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)sz, "Window size");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)sc, "Scaling\tF12");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)sp, "Speed\tCtrl+PgUp/PgDn");
     AppendMenuA(m, MF_STRING | (g_present.look ? MF_CHECKED : 0), ID_VIVID, "Vivid colour\tF9");
@@ -367,12 +378,12 @@ void present_run(void) {
      * 640x480 that fits the work area (2x, 1280x960, on a 1080p screen). */
     int k = GetPrivateProfileIntA("display", "window", 0, ini_path), most = max_window_k();
     if (k < 1 || k > most) k = most >= 2 ? most & ~1 : most;
-    RECT r = { 0, 0, 320 * k, 240 * k };
-    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
     wnd = CreateWindowA("themepark", "Theme Park", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                        r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
+                        640, 480, NULL, NULL, wc.hInstance, NULL);
+    int fs = g_present.fullscreen;
+    size_window(k);                  /* (which leaves fullscreen: back to it below) */
     ShowWindow(wnd, SW_SHOW);
-    if (g_present.fullscreen) apply_fullscreen(1);
+    if (fs) apply_fullscreen(1);
     if ((muted = GetPrivateProfileIntA("sound", "mute", 0, ini_path))) sound_set_mute(1);
     for (;;) {
         MSG msg;
