@@ -20,3 +20,7 @@ stdout.txt
 stderr.txt
 setup.log
 Theme Park (recomp).cmd
+
+# Mods are the player's own; only the instructions are ours
+mods/*
+!mods/README.md

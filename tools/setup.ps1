@@ -102,7 +102,7 @@ if (-not (Test-Path (Join-Path $Toolkit 'tools\lift\lift32.py'))) {
   if (-not (Ask "  Download it now (git, about 20 MB)?")) { Fail "pcrecomp is required at $Toolkit." }
   Run "Cloning pcrecomp" @('git', 'clone', '--depth', '1', 'https://github.com/sp00nznet/pcrecomp', $Toolkit)
 }
-if (-not (Test-Path (Join-Path $Toolkit 'runtime\dos32\dos32.c'))) {
+if (-not (Select-String -Quiet -Path (Join-Path $Toolkit 'runtime\dos32\dos32.h') -Pattern 'overlay' -ErrorAction SilentlyContinue)) {
   Fail "your pcrecomp at $Toolkit predates the DOS host (runtime\dos32). Update it: git -C `"$Toolkit`" pull"
 }
 Say "  pcrecomp: $Toolkit"

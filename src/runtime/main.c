@@ -37,6 +37,8 @@ static const char* record_path;
 static volatile int exit_code = -1;
 static const char* present_dir;   /* --present-test */
 static int start_hires = 1;       /* --lowres, [game] hires=0: the original's default */
+static char mod_name[MAX_PATH];   /* --mod, [game] mod= */
+static char overlay[MAX_PATH];
 
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
  * of guest time, game pixels, a set-1 scancode in hex). Each fires once at
@@ -189,6 +191,7 @@ int main(int argc, char** argv) {
         GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
         if (v[0]) game_fps = atof(v);
         start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
+        GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
     }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;
@@ -205,6 +208,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
         else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
         else if (!strcmp(argv[i], "--lowres")) start_hires = 0;
+        else if (!strcmp(argv[i], "--mod") && i + 1 < argc) snprintf(mod_name, sizeof mod_name, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--hires")) start_hires = 1;
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) { wav = open_wav(argv[++i]); }
         else if (!strcmp(argv[i], "--present-test") && i + 1 < argc) { present_dir = argv[++i]; headless = 1; }
@@ -237,6 +241,17 @@ int main(int argc, char** argv) {
     }
 
     cfg.root = root;
+    /* A mod is a folder laid over the game folder, same layout: mods\NAME
+     * beside game\, or any path. Files it has replace the game's for reading. */
+    if (mod_name[0]) {
+        if (strchr(mod_name, '\\') || strchr(mod_name, '/')) snprintf(overlay, sizeof overlay, "%s", mod_name);
+        else snprintf(overlay, sizeof overlay, "%s\\..\\mods\\%s", root, mod_name);
+        if (GetFileAttributesA(overlay) == INVALID_FILE_ATTRIBUTES) {
+            fprintf(stderr, "themepark: no mod folder %s\n", overlay);
+            return 1;
+        }
+        cfg.overlay = overlay;
+    }
     cfg.cwd = "\\GAME";
     cfg.progname = "C:\\GAME\\MAIN.EXE";
     cfg.args = args;

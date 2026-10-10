@@ -14,6 +14,8 @@ versions follow [SemVer](https://semver.org/).
   (needs pcrecomp#70).
 
 ### Added
+- Mods: `--mod NAME` lays `mods\NAME` over the game's files (needs
+  pcrecomp#73).
 - Settings menu on F10 or a right-click on the bars: scaling, colour, speed,
   fullscreen, mute and whether parks open in 640x480.
 - Xbox controller (XInput, loaded at run time) as the mouse and keys.

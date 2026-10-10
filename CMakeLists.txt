@@ -7,6 +7,11 @@ if(NOT EXISTS ${PCRECOMP}/runtime/dos32/dos32.c)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} has no runtime/dos32 (needs pcrecomp with the LE front end); set -DPCRECOMP=")
 endif()
 
+file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_OVERLAY REGEX "overlay")
+if(NOT HAS_OVERLAY)
+  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (pcrecomp#73): git -C ${PCRECOMP} pull")
+endif()
+
 file(GLOB GEN ${CMAKE_SOURCE_DIR}/src/recomp/gen/recomp_*.c)
 if(NOT GEN)
   message(FATAL_ERROR "src/recomp/gen is empty: run `py -3 run_lift.py` first")
