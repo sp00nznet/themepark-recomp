@@ -75,6 +75,7 @@ void sos_digi_start(void (*lifted)(void)) {
     int variant = M8(VARIANT);
     int rate = variant == 2 ? 44100 : variant == 1 ? 22050 : 11025;
     int loop = !(flags & 0x4000) ? 0 : loops == 0xFFFF ? -1 : loops > 0 ? loops - 1 : 0;
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] start id %d data %08X len %u loops %d flags %04X vol %d ret %08X\n", id, data, len, loops, flags, vol, M32(g_esp));
     audio_stop(voice_of[id]);
     voice_of[id] = sound_mute ? 0 : audio_play(dos32_mem(data), len, variant == 2 ? 16 : 8, variant == 2, rate,
                                                 vol >> 8, 64, loop);
@@ -88,6 +89,7 @@ void sos_digi_done(void (*lifted)(void)) { (void)lifted; ret(!audio_playing(voic
 void sos_digi_stop(void (*lifted)(void)) {
     (void)lifted;
     int id = ARG(1) & 255;
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] stop id %d\n", id);
     audio_stop(voice_of[id]);
     voice_of[id] = 0;
     ret(0);
@@ -96,6 +98,7 @@ void sos_digi_stop(void (*lifted)(void)) {
 /* sosDIGISetSampleVolume(h, id, vol 0..0x7FFF) */
 void sos_digi_volume(void (*lifted)(void)) {
     (void)lifted;
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] vol id %d %d\n", ARG(1) & 255, ARG(2) & 0xFFFF);
     audio_set(voice_of[ARG(1) & 255], (int)(ARG(2) & 0xFFFF) >> 8, -1, -1);
     ret(0);
 }
@@ -316,6 +319,7 @@ void sos_midi_send(void (*lifted)(void)) {
     (void)lifted;
     const uint8_t* p = dos32_mem(ARG(1));
     uint32_t len = ARG(3) & 0xFFFF;
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] midi %u: %02X %02X %02X\n", len, p[0], p[1], p[2]);
     if (midi && len >= 1 && len <= 3) {
         uint32_t msg = p[0] | (len > 1 ? (uint32_t)p[1] << 8 : 0) | (len > 2 ? (uint32_t)p[2] << 16 : 0);
         EnterCriticalSection(&midi_lock);
@@ -344,4 +348,12 @@ void sound_set_mute(int on) {
             midiOutShortMsg(midi, 0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
         LeaveCriticalSection(&midi_lock);
     }
+}
+
+/* After a save state loads: the host's voices and songs belong to the moment
+ * before it. Stop them all; the game starts what it wants again, finding its
+ * old channels done. */
+void sound_reset(void) {
+    audio_stop_all();
+    for (int k = 0; k < 8; k++) song_stop(&songs[k]);
 }

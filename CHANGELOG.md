@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- The mouse drifted on its own (laying a path to the right also laid it
+  downward) and pushing at the screen's edge barely scrolled: the game reads
+  how far the mouse moved from where it last put its cursor, and the host fed
+  it the window position. The window now captures the mouse and sends raw
+  motion (needs pcrecomp#76).
+- Holding an arrow key scrolled one step: key repeats now reach the game, as a
+  PC keyboard sends them.
 - 640x480 drew no rides, buildings or people: lift32 made 16-bit `sar` a
   logical shift, and the game halves its sprite offsets with it (needs
   pcrecomp#72).
@@ -14,6 +21,13 @@ versions follow [SemVer](https://semver.org/).
   (needs pcrecomp#70).
 
 ### Added
+- Save states: 9 slots in the settings menu, about 8 MB each, loading in a
+  park in the same session or a later one (needs pcrecomp#77). `--save` and
+  `--load` for scripted runs.
+- Window size in the settings menu: whole multiples of 320x240 that fit the
+  screen, remembered.
+- `--move T:dx,dy` (relative mouse motion) for scripted runs; `TP_SNDLOG=1`
+  logs the game's sound calls.
 - Mods: `--mod NAME` lays `mods\NAME` over the game's files (needs
   pcrecomp#73).
 - Settings menu on F10 or a right-click on the bars: scaling, colour, speed,

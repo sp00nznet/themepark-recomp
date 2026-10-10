@@ -24,7 +24,6 @@
 typedef DWORD (WINAPI *get_state_fn)(DWORD, XINPUT_STATE*);
 static get_state_fn get_state;
 static int tried;
-static float px = 160, py = 100;      /* the pointer, game pixels */
 static WORD prev_buttons;
 static int prev_dirs;
 
@@ -40,22 +39,20 @@ void pad_poll(int fw, int fh, void (*speed_step)(int up)) {
     XINPUT_STATE st;
     if (!get_state || get_state(0, &st) != ERROR_SUCCESS) return;
     XINPUT_GAMEPAD* g = &st.Gamepad;
+    (void)fh;
 
     /* Pointer: a dead zone, then speed growing with the square of the push. */
     float sx = g->sThumbLX / 32767.0f, sy = -g->sThumbLY / 32767.0f;
     float mag = sqrtf(sx * sx + sy * sy);
     WORD b = g->wButtons;
-    int moved = 0;
+    float dx = 0, dy = 0;
     if (mag > 0.24f) {
         float k = (mag - 0.24f) / 0.76f, v = 1.0f + k * k * 9.0f * fw / 320.0f;
-        px += sx / mag * k * v; py += sy / mag * k * v;
-        if (px < 0) px = 0; if (px > fw - 1) px = (float)(fw - 1);
-        if (py < 0) py = 0; if (py > fh - 1) py = (float)(fh - 1);
-        moved = 1;
+        dx = sx / mag * k * v; dy = sy / mag * k * v;
     }
     int buttons = (b & XINPUT_GAMEPAD_A ? 1 : 0) | (b & XINPUT_GAMEPAD_B ? 2 : 0);
     int prev_mb = (prev_buttons & XINPUT_GAMEPAD_A ? 1 : 0) | (prev_buttons & XINPUT_GAMEPAD_B ? 2 : 0);
-    if (moved || buttons != prev_mb) dos32_mouse((int)px, (int)py, buttons);
+    if (dx || dy || buttons != prev_mb) dos32_mouse_move(dx, dy, buttons);
 
     /* Scrolling: the D-pad or the right stick, as the arrow keys. */
     int dirs = 0;
@@ -80,4 +77,3 @@ void pad_poll(int fw, int fh, void (*speed_step)(int up)) {
     prev_buttons = b;
 }
 
-void pad_sync(int x, int y) { px = (float)x; py = (float)y; }

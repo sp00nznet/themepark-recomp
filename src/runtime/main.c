@@ -3,7 +3,8 @@
  * shows it in a window, or headless with --record.
  *
  *   themepark.exe [--headless] [--record out.mp4] [--seconds N] [--log]
- *                 [--click T:x,y] [--key T:sc] [--game DIR] [--fps N]
+ *                 [--click T:x,y] [--key T:sc] [--save T:slot] [--load T:slot]
+ *                 [--game DIR] [--fps N]
  *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
  *                 [-- game args]
  *
@@ -26,6 +27,7 @@
 extern const uint32_t recomp_image_base, recomp_image_size, recomp_image_stack, recomp_entry_va;
 extern const uint8_t recomp_image[];
 extern double game_fps;   /* game.c */
+extern volatile int state_request;   /* game.c: save states */
 extern int sound_mute, sound_headless;   /* sound.c */
 void sound_tick(double dt);
 
@@ -53,9 +55,9 @@ static long frame_no;
 static void add_event(int kind, const char* spec) {
     double t; int a = 0, b = 0;
     if (nev >= 256) return;
-    if (kind == 'c' && sscanf(spec, "%lf:%d,%d", &t, &a, &b) != 3) return;
+    if ((kind == 'c' || kind == 'm') && sscanf(spec, "%lf:%d,%d", &t, &a, &b) != 3) return;
     if (kind == 'k' && sscanf(spec, "%lf:%x", &t, &a) != 2) return;
-    if (kind == 'f' && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
+    if ((kind == 'f' || kind == 's' || kind == 'l') && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
     if (kind == 'p' && sscanf(spec, "%lf:%x=%x", &t, &a, &b) != 3) return;
     if (kind == 'd') { if (sscanf(spec, "%lf:", &t) != 1 || ndump >= 8) return;
                        snprintf(dump_path[ndump], MAX_PATH, "%s", strchr(spec, ':') + 1); a = ndump++; }
@@ -69,18 +71,22 @@ static void run_events(void) {
             if (f == frame_no - 6) dos32_mouse(evs[i].a, evs[i].b, 0);   /* move there first */
             if (f == frame_no) dos32_mouse(evs[i].a, evs[i].b, 1);
             if (f == frame_no - 4) dos32_mouse(evs[i].a, evs[i].b, 0);
+        } else if (evs[i].kind == 'm') {          /* --move T:dx,dy: relative, as a captured mouse */
+            if (f == frame_no) dos32_mouse_move(evs[i].a, evs[i].b, 0);
         } else if (evs[i].kind == 'd') {
             if (f == frame_no) {   /* --dump: the image and heap, for finding a variable */
                 FILE* d = fopen(dump_path[evs[i].a], "wb");
-                if (d) { fwrite(dos32_mem(0x400000), 1, 0x4000000, d); fclose(d); }
+                if (d) { fwrite(dos32_mem(0x400000), 1, 0x4C00000, d); fclose(d); }   /* up to the heap top, 0x5000000 */
             }
         } else if (evs[i].kind == 'p') {          /* --poke: a guest byte */
             if (f == frame_no) *dos32_mem((uint32_t)evs[i].a) = (uint8_t)evs[i].b;
         } else if (evs[i].kind == 'f') {
             if (f == frame_no) game_fps = evs[i].a;
+        } else if (evs[i].kind == 's' || evs[i].kind == 'l') {   /* --save / --load T:slot */
+            if (f == frame_no) state_request = evs[i].kind == 's' ? evs[i].a : -evs[i].a;
         } else if (evs[i].kind == 'k') {
             if (f == frame_no) dos32_key(evs[i].a, 1);
-            if (f == frame_no - 4) dos32_key(evs[i].a, 0);
+            if (f == frame_no - 12) dos32_key(evs[i].a, 0);   /* held a sixth of a second: the park polls keys slowly */
         }
     }
 }
@@ -217,7 +223,10 @@ int main(int argc, char** argv) {
             char* l = strstr(args, "-l"); if (l) l[2] = argv[++i][0]; }
         else if (!strcmp(argv[i], "--click") && i + 1 < argc) add_event('c', argv[++i]);
         else if (!strcmp(argv[i], "--key") && i + 1 < argc) add_event('k', argv[++i]);
+        else if (!strcmp(argv[i], "--move") && i + 1 < argc) add_event('m', argv[++i]);
         else if (!strcmp(argv[i], "--fps-at") && i + 1 < argc) add_event('f', argv[++i]);
+        else if (!strcmp(argv[i], "--save") && i + 1 < argc) add_event('s', argv[++i]);
+        else if (!strcmp(argv[i], "--load") && i + 1 < argc) add_event('l', argv[++i]);
         else if (!strcmp(argv[i], "--dump") && i + 1 < argc) add_event('d', argv[++i]);
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc) add_event('p', argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc && nwatch < 8) watch[nwatch++] = strtoul(argv[++i], NULL, 16);

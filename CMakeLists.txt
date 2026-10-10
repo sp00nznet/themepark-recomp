@@ -7,9 +7,9 @@ if(NOT EXISTS ${PCRECOMP}/runtime/dos32/dos32.c)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} has no runtime/dos32 (needs pcrecomp with the LE front end); set -DPCRECOMP=")
 endif()
 
-file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_OVERLAY REGEX "overlay")
-if(NOT HAS_OVERLAY)
-  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (pcrecomp#73): git -C ${PCRECOMP} pull")
+file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_STATES REGEX "dos32_state_save")
+if(NOT HAS_STATES)
+  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (pcrecomp#77): git -C ${PCRECOMP} pull")
 endif()
 
 file(GLOB GEN ${CMAKE_SOURCE_DIR}/src/recomp/gen/recomp_*.c)

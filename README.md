@@ -16,22 +16,22 @@ conformance harness as the other recomp repos.
 and runs from the title through the name prompt, menus, new-game setup and
 world map into a running park. It has not been played for long by a person
 yet. Sound effects and music play through the host (HMI SOS replaced;
-[docs/sound.md](docs/sound.md)). The remaster features below are on the [roadmap](ROADMAP.md),
-not done.
+[docs/sound.md](docs/sound.md)). What is next is on the [roadmap](ROADMAP.md).
 
 | Area | State |
 |---|---|
 | Boot, title, attract demo | works |
 | Name prompt, main menu, setup screens, world map | works |
 | Park simulation (calendar, visitors, money) | runs; long play untested |
-| Keyboard and mouse | work |
+| Keyboard and mouse | work; a click in the picture captures the mouse, Alt+Tab or F10 frees it |
 | Xbox controller | mapped onto the mouse and keys; not yet tried with a real pad |
 | Mods | a folder laid over the game's files ([mods/README.md](mods/README.md)) |
 | Settings menu (F10) | scaling, colour, speed, fullscreen, mute, 640x480 default |
 | 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
 | Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
 | Music | the game's General MIDI songs on the Windows synth |
-| Saving and loading | untested |
+| Save states | 9 slots in the settings menu (F10) |
+| The game's own saves | untested |
 | Own presenter | Direct3D 11: sharp-bilinear, smooth, CRT, nearest, integer (F12), vivid colour (F9), borderless fullscreen (F11); GDI fallback |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
@@ -112,8 +112,9 @@ build; a pcrecomp checkout older than the DOS host stops the configure with
 ## Usage
 
 ```
-themepark.exe                       play in a window: F10 or right-click on the bars for the settings
-                                    menu; F12 scaling, F9 vivid colour, F11 / Alt+Enter fullscreen
+themepark.exe                       play in a window: F10 for the settings menu (save states, window
+                                    size, scaling, speed...); F12 scaling, F9 vivid colour,
+                                    F11 / Alt+Enter fullscreen
 themepark.exe --fps 35              the game's speed: frames per second (default 25; Ctrl+PgUp/PgDn in game)
 themepark.exe --lowres              parks in 320x200, as the original started (R toggles either way)
 themepark.exe --scale crt           scaling: sharp (default), smooth, crt, nearest, integer
@@ -127,12 +128,22 @@ themepark.exe --headless --seconds 90 --click 10:160,100 --key 13:14 ...
                                     scripted input at guest times (game pixels, set-1 scancodes)
 ```
 
+Click in the picture to play: the window captures the mouse, as the game reads
+how far it moves rather than where it is (which is also how pushing past an
+edge scrolls the park). Alt+Tab, the Windows key or F10 gives it back. In a
+park, O (or a click on the right-hand ticket booth) opens the gates.
+
+**Save states**: F10, *Save state* or *Load state*, slots 1 to 9, kept in
+`states\` beside the exe (about 8 MB each). A state saved in a park loads in a
+park, in this session or a later one; not from the title or the menus, and not
+into a different build.
+
 An Xbox controller works alongside the mouse: left stick the pointer, A / B
 the buttons, D-pad or right stick to scroll, LB / RB speed, Y the 640x480
 switch, X Space, Start Esc, Back F1 (not yet tried on a real pad).
 
 Display choices are remembered in `themepark.ini` beside the exe (`[display]
-scale`, `vivid`, `fullscreen`, `vsync`; `[game] fps`, `hires`).
+scale`, `vivid`, `fullscreen`, `vsync`, `window`; `[game] fps`, `hires`).
 
 Headless runs keep their own clock, so the same script gives the same run every
 time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,

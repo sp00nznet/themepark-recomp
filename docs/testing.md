@@ -19,12 +19,15 @@ contact sheet: `ffmpeg -i out.mp4 -vf "fps=1/2,scale=320:240,tile=6x4" -frames:v
 
 ## Scripted input
 
-All times are guest seconds; positions are game pixels (320x200).
+All times are guest seconds; positions are game pixels (320x200 in the menus,
+640x480 in a park).
 
 | Option | Does |
 |---|---|
 | `--click T:x,y` | left press at T, release 4 frames later, the pointer moved there first |
-| `--key T:sc` | press and release a key; `sc` is a set-1 scancode in hex (`1C` Enter, `39` space, `3B` F1) |
+| `--key T:sc` | press a key, release it a sixth of a second later; `sc` is a set-1 scancode in hex (`1C` Enter, `39` space, `3B` F1, `18` O) |
+| `--move T:dx,dy` | relative mouse motion, as the captured mouse sends it (pushing past an edge scrolls the park) |
+| `--save T:slot`, `--load T:slot` | save or load a save state (slots 1-9, `states\` beside the exe) |
 | `--fps-at T:N` | change the frame rate at T (0 = unpaced) |
 
 `tools/conformance.py` has the script from the title into a park.
@@ -35,7 +38,8 @@ All times are guest seconds; positions are game pixels (320x200).
 |---|---|
 | `--log` | dos32's log: ints, file opens, vector installs, DPMI allocations, port read counts |
 | `--watch addr` | print a guest word whenever it changes (up to 8) |
-| `--dump T:file` | write 64 MB of guest memory from 0x400000 to a file at T (diff two to find a variable) |
+| `--dump T:file` | write guest memory from 0x400000 to the heap top (0x5000000) to a file at T (diff two to find a variable) |
+| `TP_SNDLOG=1` | log every effect start, stop and volume change and every MIDI message the game sends |
 | `DOS32_BREAK=addr` | hardware write watchpoint: every write to the word, with the lifted function that made it |
 
 Unhandled ints and ports are always reported once each. A guest fault prints

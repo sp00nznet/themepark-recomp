@@ -6,8 +6,11 @@
  *   F9               colour: natural / vivid
  *   Ctrl+PgUp/PgDn   speed: the game's frames per second, 12 to 120 (default 25)
  *   F11, Alt+Enter   borderless fullscreen
- *   F10, right-click on the bars   the settings menu (all of the above, mute,
- *                    and whether parks open in 640x480)
+ *   F10, right-click on the bars   the settings menu (all of the above, save
+ *                    states, window size, mute, and whether parks open in 640x480)
+ *
+ * The mouse is captured by a click in the picture and freed by Alt+Tab or F10:
+ * the game reads how far the mouse moved, not where it is (see capture()).
  *
  * The picture is scaled by Direct3D 11 (present_d3d.c), or by GDI if that is
  * unavailable. Choices are kept in themepark.ini beside the exe. The game's
@@ -38,6 +41,13 @@ static WINDOWPLACEMENT saved_place = { sizeof saved_place };
 static DWORD title_until;        /* show the scaling mode in the title for a moment */
 extern double game_fps;          /* game.c: the speed control */
 static const int speeds[] = { 12, 15, 20, 25, 30, 35, 40, 50, 60, 90, 120 };
+static int captured, buttons;    /* the mouse: below */
+static DWORD hint_until;
+static void clip(void);
+extern volatile int state_request;              /* game.c: save states */
+extern char state_note[];
+extern volatile DWORD state_note_until;
+void state_path(int slot, char* out, size_t n);
 
 int present_scale_from_name(const char* name) {
     for (int i = 0; i < SCALE_COUNT; i++) if (!_stricmp(name, scale_names[i])) return i;
@@ -76,13 +86,21 @@ static void layout(void) {
     }
     dst.left = (cw - w) / 2; dst.top = (ch - h) / 2;
     dst.right = dst.left + w; dst.bottom = dst.top + h;
+    if (captured) clip();
 }
 
 static void set_title(void) {
-    char t[128];
-    if (GetTickCount() < title_until)
+    char t[192];
+    DWORD now = GetTickCount();
+    if (now < state_note_until)
+        snprintf(t, sizeof t, "Theme Park - %s", state_note);
+    else if (now < title_until)
         snprintf(t, sizeof t, "Theme Park - %s%s - speed %.0f fps", scale_names[g_present.scale],
                  g_present.look ? ", vivid" : "", game_fps);
+    else if (!captured)
+        snprintf(t, sizeof t, "Theme Park - click to play");
+    else if (now < hint_until)
+        snprintf(t, sizeof t, "Theme Park - Alt+Tab or F10 frees the mouse");
     else
         snprintf(t, sizeof t, "Theme Park");
     SetWindowTextA(wnd, t);
@@ -106,15 +124,36 @@ static void apply_fullscreen(int on) {
     g_present.fullscreen = on;
 }
 
-static void mouse_to_game(LPARAM lp, WPARAM wp) {
-    int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
+/* The mouse is captured while the window has it: clicking into the picture
+ * takes it, and losing focus (Alt+Tab, the Windows key) or the settings menu
+ * gives it back. Captured, the pointer is held inside the picture and its raw
+ * motion goes to the game as a real mouse's would: the game moves its own
+ * cursor by how far the mouse went, and scrolls the park when that pushes past
+ * the edge of the screen. */
+
+static void clip(void) {
+    RECT r = dst;
+    MapWindowPoints(wnd, NULL, (POINT*)&r, 2);
+    ClipCursor(&r);
+}
+
+static void capture(int on) {
+    if (on == captured) return;
+    captured = on;
+    if (on) { clip(); hint_until = GetTickCount() + 4000; }
+    else { ClipCursor(NULL); buttons = 0; dos32_mouse_move(0, 0, 0); }
+    title_until = 0;
+}
+
+static void raw_motion(LPARAM lp) {
+    RAWINPUT ri;
+    UINT n = sizeof ri;
     int dw = dst.right - dst.left, dh = dst.bottom - dst.top;
-    if (dw <= 0 || dh <= 0) return;
-    int gx = (x - dst.left) * fw / dw, gy = (y - dst.top) * fh / dh;
-    if (gx < 0) gx = 0; if (gx >= fw) gx = fw - 1;
-    if (gy < 0) gy = 0; if (gy >= fh) gy = fh - 1;
-    pad_sync(gx, gy);
-    dos32_mouse(gx, gy, (wp & MK_LBUTTON ? 1 : 0) | (wp & MK_RBUTTON ? 2 : 0) | (wp & MK_MBUTTON ? 4 : 0));
+    if (GetRawInputData((HRAWINPUT)lp, RID_INPUT, &ri, &n, sizeof(RAWINPUTHEADER)) == (UINT)-1 ||
+        ri.header.dwType != RIM_TYPEMOUSE || (ri.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) || dw <= 0 || dh <= 0)
+        return;
+    if (ri.data.mouse.lLastX || ri.data.mouse.lLastY)
+        dos32_mouse_move((double)ri.data.mouse.lLastX * fw / dw, (double)ri.data.mouse.lLastY * fh / dh, buttons);
 }
 
 /* GDI: the fallback when Direct3D 11 is unavailable. */
@@ -167,12 +206,55 @@ static void set_speed(int fps) {
     title_until = GetTickCount() + 2000;
 }
 
+/* Window sizes: whole multiples of 320x240 that fit the work area. */
+static int max_window_k(void) {
+    RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+    int k = 8;
+    while (k > 1 && (320 * k > wa.right - wa.left - 40 || 240 * k > wa.bottom - wa.top - 80)) k--;
+    return k;
+}
+
+static void size_window(int k) {
+    RECT r = { 0, 0, 320 * k, 240 * k };
+    if (g_present.fullscreen) apply_fullscreen(0);
+    ShowWindow(wnd, SW_RESTORE);
+    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+    SetWindowPos(wnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
+}
+
+/* A save state slot's line in the menu: when it was saved, or empty. */
+static int slot_label(int slot, char* out, size_t n) {
+    char path[MAX_PATH];
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    SYSTEMTIME u, t;
+    state_path(slot, path, sizeof path);
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &a)) { snprintf(out, n, "Slot %d\t(empty)", slot); return 0; }
+    FileTimeToSystemTime(&a.ftLastWriteTime, &u);
+    SystemTimeToTzSpecificLocalTime(NULL, &u, &t);
+    snprintf(out, n, "Slot %d\t%04d-%02d-%02d %02d:%02d", slot, t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute);
+    return 1;
+}
+
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
-    enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES };
+    enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (square pixels)" };
-    HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu();
+    capture(0);
+    HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
+          sv = CreatePopupMenu(), ld = CreatePopupMenu();
+    for (int k = 2; k <= max_window_k(); k++) {
+        char t[48];
+        snprintf(t, sizeof t, "%d x %d", 320 * k, 240 * k);
+        AppendMenuA(sz, MF_STRING | (!g_present.fullscreen && cw == 320 * k && ch == 240 * k ? MF_CHECKED : 0), ID_SIZE + k, t);
+    }
+    for (int slot = 1; slot <= 9; slot++) {
+        char t[64];
+        int used = slot_label(slot, t, sizeof t);
+        AppendMenuA(sv, MF_STRING, ID_SAVE + slot, t);
+        AppendMenuA(ld, MF_STRING | (used ? 0 : MF_GRAYED), ID_LOAD + slot, t);
+    }
     for (int i = 0; i < SCALE_COUNT; i++)
         AppendMenuA(sc, MF_STRING | (g_present.scale == i ? MF_CHECKED : 0), ID_SCALE + i, scale_labels[i]);
     for (int k = 0; k < (int)(sizeof speeds / sizeof speeds[0]); k++) {
@@ -191,7 +273,15 @@ static void settings_menu(int sx, int sy) {
                 "Open parks in 640x480 (R switches in a park)");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
     DestroyMenu(m);
-    if (cmd >= ID_SCALE && cmd < ID_SCALE + SCALE_COUNT) { g_present.scale = cmd - ID_SCALE; layout(); }
+    if (cmd > ID_SAVE && cmd <= ID_SAVE + 9) { state_request = cmd - ID_SAVE; return; }
+    if (cmd > ID_LOAD && cmd <= ID_LOAD + 9) { state_request = -(cmd - ID_LOAD); return; }
+    if (cmd >= ID_SIZE && cmd < ID_SAVE) {
+        char v[8];
+        size_window(cmd - ID_SIZE);
+        snprintf(v, sizeof v, "%d", cmd - ID_SIZE);
+        WritePrivateProfileStringA("display", "window", v, ini_path);
+    }
+    else if (cmd >= ID_SCALE && cmd < ID_SCALE + SCALE_COUNT) { g_present.scale = cmd - ID_SCALE; layout(); }
     else if (cmd >= ID_SPEED && cmd < ID_VIVID) set_speed(speeds[cmd - ID_SPEED]);
     else if (cmd == ID_VIVID) g_present.look ^= 1;
     else if (cmd == ID_FULL) apply_fullscreen(!g_present.fullscreen);
@@ -225,22 +315,33 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
             speed_step(wp == VK_PRIOR);
             return 0;
         }
-        if (!(lp & (1 << 30))) key(lp, 1);
+        key(lp, 1);   /* repeats too: a held key types again, as on a PC keyboard */
         return 0;
     case WM_SYSKEYUP: case WM_KEYUP:
         if (wp == VK_F9 || wp == VK_F11 || wp == VK_F12) return 0;
         key(lp, 0);
         return 0;
+    case WM_INPUT:
+        if (captured) raw_motion(lp);
+        break;
+    case WM_ACTIVATE:
+        if (LOWORD(wp) == WA_INACTIVE) capture(0);
+        break;
+    case WM_MOVE: if (captured) clip(); return 0;
     case WM_RBUTTONDOWN: {               /* on the bars: the settings menu */
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
-        if (!PtInRect(&dst, p)) { ClientToScreen(h, &p); settings_menu(p.x, p.y); return 0; }
-        } /* fall through: inside the picture it is the game's */
-    case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP:
-    case WM_RBUTTONUP: case WM_MBUTTONDOWN: case WM_MBUTTONUP:
-        if (m == WM_LBUTTONDOWN || m == WM_RBUTTONDOWN) SetCapture(h);
-        if (m == WM_LBUTTONUP || m == WM_RBUTTONUP) ReleaseCapture();
-        mouse_to_game(lp, wp);
+        if (!captured && !PtInRect(&dst, p)) { ClientToScreen(h, &p); settings_menu(p.x, p.y); return 0; }
+        } /* fall through */
+    case WM_LBUTTONDOWN: case WM_MBUTTONDOWN: case WM_LBUTTONUP: case WM_RBUTTONUP: case WM_MBUTTONUP: {
+        POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (!captured) {                 /* the click that takes the mouse is not the game's */
+            if (m == WM_LBUTTONDOWN && PtInRect(&dst, p)) capture(1);
+            return 0;
+        }
+        buttons = (wp & MK_LBUTTON ? 1 : 0) | (wp & MK_RBUTTON ? 2 : 0) | (wp & MK_MBUTTON ? 4 : 0);
+        dos32_mouse_move(0, 0, buttons);
         return 0;
+    }
     case WM_SETCURSOR:
         if (LOWORD(lp) == HTCLIENT) { SetCursor(NULL); return TRUE; }   /* the game draws its own */
         break;
@@ -255,14 +356,16 @@ void present_run(void) {
                      LoadCursor(NULL, IDC_ARROW), NULL, NULL, "themepark" };
     wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     RegisterClassA(&wc);
-    /* The largest 4:3 window that fits the work area at a whole multiple of 320x240. */
-    RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
-    int k = 4;
-    while (k > 1 && (320 * k > wa.right - wa.left - 40 || 240 * k > wa.bottom - wa.top - 80)) k--;
+    /* The size chosen in the menu, else the largest multiple of 320x240 up
+     * to 1280x960 that fits the work area. */
+    int k = GetPrivateProfileIntA("display", "window", 0, ini_path), most = max_window_k();
+    if (k < 1 || k > most) k = most < 4 ? most : 4;
     RECT r = { 0, 0, 320 * k, 240 * k };
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
     wnd = CreateWindowA("themepark", "Theme Park", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                         r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
+    RAWINPUTDEVICE mouse_dev = { 1, 2, 0, wnd };   /* generic desktop, mouse */
+    RegisterRawInputDevices(&mouse_dev, 1, sizeof mouse_dev);
     ShowWindow(wnd, SW_SHOW);
     if (g_present.fullscreen) apply_fullscreen(1);
     if ((muted = GetPrivateProfileIntA("sound", "mute", 0, ini_path))) sound_set_mute(1);
