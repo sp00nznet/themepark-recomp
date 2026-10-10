@@ -72,6 +72,6 @@ A function in `run_lift.py` `OVERRIDES` is lifted as `sub_X_lifted`, and
   [pacing.md](pacing.md).
 - **Memory**: `0x00472950`, Bullfrog's grab-everything memory manager, runs
   inside `hold_back_memory` (game.c), which keeps 1 MB away from it.
-- **Sound**: 29 HMI SOS entry points become host functions in sound.c that do
+- **Sound**: 28 HMI SOS entry points and the game's music-volume call become host functions in sound.c that do
   the job themselves and return as the `ret` would, never calling the lifted
   body. See [sound.md](sound.md).
