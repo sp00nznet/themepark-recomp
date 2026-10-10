@@ -18,7 +18,9 @@ build\themepark.exe
    src/runtime/main.c               options, the game thread, headless --record, scripted input
    src/runtime/present.c            the window, keyboard, mouse, themepark.ini
    src/runtime/present_d3d.c        Direct3D 11 scaling shaders (GDI fallback in present.c)
-   src/runtime/game.c               Theme Park specifics: frame pacing
+   src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back
+   src/runtime/sound.c              HMI SOS replaced: effects and music (docs/sound.md)
+   src/runtime/audio.c              the effects mixer on waveOut
 ```
 
 ## Who owns what
@@ -63,7 +65,13 @@ Variables this repo relies on (all found with the tools in testing.md):
 ## Overrides
 
 A function in `run_lift.py` `OVERRIDES` is lifted as `sub_X_lifted`, and
-`sub_X` becomes a host function that is handed the lifted body. There is one:
+`sub_X` becomes a host function that is handed the lifted body. Three kinds:
 
-- `0x0040107F`, the per-frame input poll, becomes `pace_frame` (game.c). See
+- **Pacing**: `0x0040107F`, the per-frame input poll, becomes `pace_frame`
+  (game.c), which waits for the frame slot and then runs the lifted body. See
   [pacing.md](pacing.md).
+- **Memory**: `0x00472950`, Bullfrog's grab-everything memory manager, runs
+  inside `hold_back_memory` (game.c), which keeps 1 MB away from it.
+- **Sound**: 29 HMI SOS entry points become host functions in sound.c that do
+  the job themselves and return as the `ret` would, never calling the lifted
+  body. See [sound.md](sound.md).

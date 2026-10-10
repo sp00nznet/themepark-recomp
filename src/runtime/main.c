@@ -21,10 +21,13 @@
 
 #include "dos32.h"
 #include "present.h"
+#include "audio.h"
 
 extern const uint32_t recomp_image_base, recomp_image_size, recomp_image_stack, recomp_entry_va;
 extern const uint8_t recomp_image[];
 extern double game_fps;   /* game.c */
+extern int sound_mute, sound_headless;   /* sound.c */
+void sound_tick(double dt);
 
 static dos32_config cfg;
 static char root[MAX_PATH];
@@ -78,6 +81,8 @@ static void run_events(void) {
 
 /* --record: frames piped to ffmpeg at 35 fps (every second retrace). */
 static FILE* rec;
+static FILE* wav;                /* --wav, or the sound of --record before it is muxed */
+static char rec_video[MAX_PATH], wav_path[MAX_PATH];
 static uint32_t rec_buf[1024 * 768];
 static int rec_w, rec_h;
 static uint32_t watch[8];
@@ -96,6 +101,12 @@ static void on_retrace(void) {
         }
     }
     if (seconds > 0 && frame_no >= seconds * 70) dos32_quit = 1;   /* --seconds is guest time */
+    if (headless) sound_tick(1.0 / 70);
+    if (headless && !sound_mute) {           /* headless: the effects mixed on the frame clock */
+        static int16_t pcm[44100 / 70 * 2];
+        audio_render(pcm, 44100 / 70);
+        if (wav) fwrite(pcm, 4, 44100 / 70, wav);
+    }
     if (!rec || (tick++ & 1)) return;
     int w, h;
     if (!dos32_frame(rec_buf, 1024, 768, &w, &h)) { w = rec_w ? rec_w : 320; h = rec_h ? rec_h : 200; memset(rec_buf, 0, sizeof rec_buf); }
@@ -109,13 +120,37 @@ static void on_retrace(void) {
     fwrite(rec_buf, 4, (size_t)rec_w * rec_h, rec);
 }
 
+static FILE* open_wav(const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (f) { static const uint8_t blank[44]; fwrite(blank, 1, 44, f); }   /* header written at close */
+    return f;
+}
+
+static void close_wav(void) {
+    if (!wav) return;
+    long n = ftell(wav) - 44;
+    struct { char riff[4]; uint32_t size; char wave[4], fmt[4]; uint32_t fmtlen; uint16_t tag, ch;
+             uint32_t rate, bps; uint16_t align, bits; char data[4]; uint32_t dlen; } h = {
+        "RIFF", (uint32_t)n + 36, "WAVE", "fmt ", 16, 1, 2, 44100, 44100 * 4, 4, 16, "data", (uint32_t)n };
+    fseek(wav, 0, SEEK_SET);
+    fwrite(&h, sizeof h, 1, wav);
+    fclose(wav);
+    wav = NULL;
+}
+
 static void start_record(void) {
     /* The first frame decides the size, so ffmpeg starts on the first write;
      * 640x480 covers the menus and the park either way. */
     rec_w = 640; rec_h = 480;
+    /* Video goes to a side file; the sound, if any, is muxed in at the end. */
+    snprintf(rec_video, sizeof rec_video, "%s.video.mp4", record_path);
+    if (!wav && !sound_mute) {
+        snprintf(wav_path, sizeof wav_path, "%s.wav", record_path);
+        wav = open_wav(wav_path);
+    }
     char cmd[1024];
     snprintf(cmd, sizeof cmd, "ffmpeg -loglevel error -y -f rawvideo -pix_fmt bgra -s %dx%d -r 35 -i - "
-             "-vf scale=1280:960:flags=neighbor -c:v libx264 -pix_fmt yuv420p \"%s\"", rec_w, rec_h, record_path);
+             "-vf scale=1280:960:flags=neighbor -c:v libx264 -pix_fmt yuv420p \"%s\"", rec_w, rec_h, rec_video);
     rec = _popen(cmd, "wb");
     if (!rec) fprintf(stderr, "themepark: cannot start ffmpeg\n");
 }
@@ -159,6 +194,8 @@ int main(int argc, char** argv) {
             g_present.scale = m; }
         else if (!strcmp(argv[i], "--fullscreen")) g_present.fullscreen = 1;
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
+        else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
+        else if (!strcmp(argv[i], "--wav") && i + 1 < argc) { wav = open_wav(argv[++i]); }
         else if (!strcmp(argv[i], "--present-test") && i + 1 < argc) { present_dir = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--vsync") && i + 1 < argc) g_present.vsync = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--lang") && i + 1 < argc) {
@@ -198,6 +235,10 @@ int main(int argc, char** argv) {
     cfg.stack = recomp_image_stack;
     cfg.log = log_on;
 
+    /* Headless runs make no sound on a machine someone uses: no audio device
+     * and no MIDI; the effects are mixed on the frame clock for --record. */
+    sound_headless = headless;
+    audio_init(headless || sound_mute);
     /* Headless runs keep their own time: the same script gives the same run. */
     if (headless && !getenv("TP_REALTIME")) dos32_virtual_clock = 1;
     if (record_path) start_record();
@@ -215,5 +256,15 @@ int main(int argc, char** argv) {
         WaitForSingleObject(t, 5000);
     }
     if (rec) _pclose(rec);
+    close_wav();
+    if (record_path) {   /* video + sound -> --record's file */
+        char cmd[2048];
+        if (wav_path[0])
+            snprintf(cmd, sizeof cmd, "ffmpeg -loglevel error -y -i \"%s\" -i \"%s\" -c:v copy -c:a aac -shortest \"%s\"",
+                     rec_video, wav_path, record_path);
+        else
+            snprintf(cmd, sizeof cmd, "ffmpeg -loglevel error -y -i \"%s\" -c copy \"%s\"", rec_video, record_path);
+        if (system(cmd) == 0) { remove(rec_video); if (wav_path[0]) remove(wav_path); }
+    }
     return exit_code < 0 ? 0 : exit_code;
 }

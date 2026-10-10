@@ -68,6 +68,7 @@ def main():
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe'))
     ap.add_argument('--update', action='store_true')
     a = ap.parse_args()
+    a.exe = os.path.abspath(a.exe)
     if not os.path.isdir(os.path.join(HERE, 'game', 'GAME')) or not os.path.exists(a.exe):
         print('SKIP: needs game\\ (your own copy, see README) and a build at %s' % a.exe)
         return 0

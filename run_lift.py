@@ -56,6 +56,24 @@ OVERRIDES = {
     # pace was however long a frame took; native, every one of those loops
     # spins thousands of times a second. Pacing here restores the speed.
     0x0040107F: 'pace_frame',
+    # Bullfrog's memory manager grabs all memory: leave the C library some.
+    0x00472950: 'hold_back_memory',
+    # HMI SOS, replaced at its edge (src/runtime/sound.c, docs/sound.md).
+    # Detection, system init and shutdown: there is no card to find.
+    0x00475793: 'sos_ok', 0x00475950: 'sos_ok', 0x00475F3E: 'sos_ok', 0x004758FC: 'sos_ok',
+    0x00474C12: 'sos_ok', 0x00474C6E: 'sos_ok', 0x004753CA: 'sos_ok',
+    0x00477A84: 'sos_ok', 0x004779C0: 'sos_ok',
+    0x00473FC6: 'sos_ok', 0x00474162: 'sos_ok', 0x00474639: 'sos_ok', 0x0047564A: 'sos_ok',
+    0x00477238: 'sos_ok',
+    # Digital: driver init, start, done, stop, volume.
+    0x00474C98: 'sos_digi_init_driver',
+    0x0047943F: 'sos_digi_start', 0x004792DB: 'sos_digi_done',
+    0x00479A48: 'sos_digi_stop', 0x004779F8: 'sos_digi_volume',
+    # MIDI: driver init and reset, songs, tempo; and the game's music volume.
+    0x0047418C: 'sos_midi_init_driver', 0x0047474A: 'sos_midi_reset',
+    0x0046F68F: 'sos_midi_init_song', 0x0046FC05: 'sos_midi_start', 0x0046FC8D: 'sos_midi_stop',
+    0x0046FBC2: 'sos_midi_uninit_song', 0x00472174: 'sos_midi_done', 0x00479E5C: 'sos_midi_tempo',
+    0x004700AB: 'music_volume', 0x00477202: 'sos_midi_send',
 }
 
 

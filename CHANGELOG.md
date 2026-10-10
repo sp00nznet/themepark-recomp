@@ -5,7 +5,16 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Sound init never ran: the game's memory manager took every block and the
+  C library could not open SNDSETUP.INF; 1 MB is held back while it grabs
+  (needs pcrecomp#70).
+
 ### Added
+- Sound: HMI SOS replaced at its API (docs/sound.md). Effects from the 44.1 kHz
+  16-bit bank through a host mixer on waveOut; the game's General MIDI songs
+  through a host HMP sequencer on the Windows synth. `--mute`; headless
+  `--record` carries the effects, `--wav` writes them alone.
 - Direct3D 11 presenter (gunman's shaders): sharp-bilinear, smooth, CRT,
   nearest and integer scaling on F12, vivid colour on F9, borderless
   fullscreen on F11 / Alt+Enter, vsync; GDI when Direct3D is unavailable.

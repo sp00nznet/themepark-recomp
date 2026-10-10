@@ -8,7 +8,10 @@ build\themepark.exe --headless --seconds 60 --record out.mp4
 
 No window, nothing on any screen, so it works over RDP. Time is guest time on
 a virtual clock (pacing.md): runs are reproducible and faster than real time.
-`--record` pipes frames to ffmpeg at 35 fps, scaled 2x nearest. Set
+`--record` pipes frames to ffmpeg at 35 fps, scaled 2x nearest, and muxes in
+the sound effects mixed on the frame clock (music is MIDI and is not captured;
+song starts are logged as `[sound] song start`). `--wav file` writes the
+effects alone. Headless runs never open an audio or MIDI device. Set
 `TP_REALTIME=1` to run headless on the wall clock instead.
 
 Frames for a look: `ffmpeg -ss 30 -i out.mp4 -frames:v 1 shot.png`, or a

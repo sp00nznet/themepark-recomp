@@ -29,3 +29,14 @@ void pace_frame(void (*lifted)(void)) {
     next_s += 1.0 / game_fps;
     lifted();
 }
+
+/* Bullfrog's memory manager (0x472950) takes every block malloc will give,
+ * down to 16 bytes, and runs its own pools on them. Under DOS/4GW something
+ * was left for the C library; here nothing is, and the next fopen (the sound
+ * setup file) fails on its first malloc. Hold 1 MB of DPMI memory back while
+ * the grab runs and give it back after: the C library's heap grows into it. */
+void hold_back_memory(void (*lifted)(void)) {
+    uint32_t held = dos32_heap_alloc(1u << 20);
+    lifted();
+    if (held) dos32_heap_free(held);
+}

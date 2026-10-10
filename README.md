@@ -15,8 +15,8 @@ conformance harness as the other recomp repos.
 **v0.1.0 — alpha.** The whole game is lifted (6,517 functions, no lift errors)
 and runs from the title through the name prompt, menus, new-game setup and
 world map into a running park. It has not been played for long by a person
-yet, and there is **no sound** (the game's HMI SOS driver layer is not
-replaced yet). The remaster features below are on the [roadmap](ROADMAP.md),
+yet. Sound effects and music play through the host (HMI SOS replaced;
+[docs/sound.md](docs/sound.md)). The remaster features below are on the [roadmap](ROADMAP.md),
 not done.
 
 | Area | State |
@@ -26,7 +26,8 @@ not done.
 | Park simulation (calendar, visitors, money) | runs; long play untested |
 | Keyboard and mouse | work |
 | 640x480 SVGA mode | untested |
-| Sound and music | not yet |
+| Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
+| Music | the game's General MIDI songs on the Windows synth |
 | Saving and loading | untested |
 | Own presenter | Direct3D 11: sharp-bilinear, smooth, CRT, nearest, integer (F12), vivid colour (F9), borderless fullscreen (F11); GDI fallback |
 
@@ -111,6 +112,7 @@ themepark.exe                       play in a window: F12 scaling, F9 vivid colo
 themepark.exe --fps 35              the game's speed: frames per second (default 25)
 themepark.exe --scale crt           scaling: sharp (default), smooth, crt, nearest, integer
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
+themepark.exe --mute                no sound
 themepark.exe --lang 1              language: 0 English (default), 1 German, 2 Italian, 3 Spanish, 4 French
 themepark.exe --headless --seconds 60 --record out.mp4
                                     no window: run 60 guest seconds and film it (needs ffmpeg)
@@ -135,6 +137,7 @@ generated from your copy of the game on your machine and is never distributed.
 - [docs/architecture.md](docs/architecture.md): how the pieces fit.
 - [docs/pacing.md](docs/pacing.md): why the game needs a frame limiter it never had.
 - [docs/testing.md](docs/testing.md): headless runs, scripted input, the conformance harness.
+- [docs/sound.md](docs/sound.md): how HMI SOS is replaced.
 
 ## License
 
