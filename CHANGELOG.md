@@ -23,6 +23,13 @@ versions follow [SemVer](https://semver.org/).
   (needs pcrecomp#70).
 
 ### Added
+- Linux, natively: the same lifted C built with gcc and SDL2
+  (`./setup.sh`, `./build-linux.sh`). An SDL window with every scaling mode,
+  the captured mouse, the settings menu as dialogs, SDL audio for the
+  effects, music on ALSA's sequencer, and the pad as an SDL GameController.
+  Conformance is 6/6, save states load across runs, and the guest memory
+  after a scripted run is identical to the Windows build's (needs
+  pcrecomp#84).
 - Save states: 9 slots in the settings menu, about 8 MB each, loading in a
   park in the same session or a later one (needs pcrecomp#77). `--save` and
   `--load` for scripted runs.

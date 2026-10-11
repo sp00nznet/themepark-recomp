@@ -9,10 +9,11 @@ variables, and a run must not fault or dispatch to code nothing lifted.
 
 conformance.json holds the last accepted result. A run that scores lower on any
 line fails (exit 1); --update accepts the current run as the new baseline. With
-no game\\ or no build it prints SKIP and exits 0: the corpus is the user's own
+no game/ or no build it prints SKIP and exits 0: the corpus is the user's own
 copy of the game and is never in the repo.
 
     py -3 tools/conformance.py [--exe build/themepark.exe] [--update]
+    python3 tools/conformance.py          (Linux: build-linux/themepark)
 """
 import argparse
 import json
@@ -65,12 +66,13 @@ def score(code, err):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe'))
+    ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
+                    else os.path.join(HERE, 'build-linux', 'themepark'))
     ap.add_argument('--update', action='store_true')
     a = ap.parse_args()
     a.exe = os.path.abspath(a.exe)
     if not os.path.isdir(os.path.join(HERE, 'game', 'GAME')) or not os.path.exists(a.exe):
-        print('SKIP: needs game\\ (your own copy, see README) and a build at %s' % a.exe)
+        print('SKIP: needs game/ (your own copy, see README) and a build at %s' % a.exe)
         return 0
     code, err = run(a.exe)
     ms = score(code, err)

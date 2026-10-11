@@ -10,16 +10,19 @@
  *
  *   effects  start / done / stop / volume  -> audio.c's mixer
  *   music    init / start / stop / tempo   -> a host HMP sequencer on the
- *                                             Windows General MIDI synth
+ *                                             system's General MIDI synth
  *   drivers  detection, init, shutdown     -> succeed, with no hardware
  *
  * docs/sound.md has the map of the game's sound layer this is built on.
  * All SOS entry points are cdecl; a far pointer is an offset dword followed
  * by a selector dword.
  */
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "compat.h"
+#ifdef _WIN32
 #include <mmsystem.h>
+#elif defined(HAVE_ALSA)
+#include <alsa/asoundlib.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,8 +122,72 @@ typedef struct {
     HANDLE thread;
 } song_t;
 
+/* The synth. Windows: its General MIDI synth (the MIDI mapper). Linux: the
+ * first ALSA sequencer port that is a synth (FluidSynth or TiMidity++ running
+ * as a server, or a hardware one), or the one TP_MIDI names ("128:0"). */
+#ifdef _WIN32
+static HMIDIOUT midi_dev;
+static int midi_open(void) { return midiOutOpen(&midi_dev, MIDI_MAPPER, 0, 0, CALLBACK_NULL) == MMSYSERR_NOERROR; }
+static void midi_out(uint32_t msg) { midiOutShortMsg(midi_dev, msg); }
+#elif defined(HAVE_ALSA)
+static snd_seq_t* seq;
+static int seq_port;
+static int midi_open(void) {
+    if (snd_seq_open(&seq, "default", SND_SEQ_OPEN_OUTPUT, 0) < 0) return 0;
+    snd_seq_set_client_name(seq, "Theme Park");
+    seq_port = snd_seq_create_simple_port(seq, "music", SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ,
+                                          SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+    snd_seq_addr_t to;
+    if (getenv("TP_MIDI") && snd_seq_parse_address(seq, &to, getenv("TP_MIDI")) == 0)
+        return snd_seq_connect_to(seq, seq_port, to.client, to.port) == 0;
+    snd_seq_client_info_t* ci;
+    snd_seq_port_info_t* pi;
+    snd_seq_client_info_alloca(&ci);
+    snd_seq_port_info_alloca(&pi);
+    snd_seq_client_info_set_client(ci, -1);
+    while (snd_seq_query_next_client(seq, ci) >= 0) {
+        snd_seq_port_info_set_client(pi, snd_seq_client_info_get_client(ci));
+        snd_seq_port_info_set_port(pi, -1);
+        while (snd_seq_query_next_port(seq, pi) >= 0) {
+            unsigned caps = snd_seq_port_info_get_capability(pi), type = snd_seq_port_info_get_type(pi);
+            if ((caps & (SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE)) ==
+                    (SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE) &&
+                (type & (SND_SEQ_PORT_TYPE_SYNTH | SND_SEQ_PORT_TYPE_SYNTHESIZER | SND_SEQ_PORT_TYPE_MIDI_GM)) &&
+                snd_seq_connect_to(seq, seq_port, snd_seq_port_info_get_client(pi), snd_seq_port_info_get_port(pi)) == 0) {
+                fprintf(stderr, "[sound] music on %s\n", snd_seq_client_info_get_name(ci));
+                return 1;
+            }
+        }
+    }
+    snd_seq_close(seq);
+    return 0;
+}
+static void midi_out(uint32_t msg) {
+    snd_seq_event_t ev;
+    int c = msg & 15, d1 = (msg >> 8) & 0x7F, d2 = (msg >> 16) & 0x7F;
+    snd_seq_ev_clear(&ev);
+    switch (msg & 0xF0) {
+    case 0x80: snd_seq_ev_set_noteoff(&ev, c, d1, d2); break;
+    case 0x90: snd_seq_ev_set_noteon(&ev, c, d1, d2); break;
+    case 0xA0: snd_seq_ev_set_keypress(&ev, c, d1, d2); break;
+    case 0xB0: snd_seq_ev_set_controller(&ev, c, d1, d2); break;
+    case 0xC0: snd_seq_ev_set_pgmchange(&ev, c, d1); break;
+    case 0xD0: snd_seq_ev_set_chanpress(&ev, c, d1); break;
+    case 0xE0: snd_seq_ev_set_pitchbend(&ev, c, (d1 | d2 << 7) - 8192); break;
+    default: return;
+    }
+    snd_seq_ev_set_source(&ev, seq_port);
+    snd_seq_ev_set_subs(&ev);
+    snd_seq_ev_set_direct(&ev);
+    snd_seq_event_output_direct(seq, &ev);
+}
+#else
+static int midi_open(void) { return 0; }
+static void midi_out(uint32_t msg) { (void)msg; }
+#endif
+
 static song_t songs[8];
-static HMIDIOUT midi;
+static int midi;                /* a synth is open */
 static CRITICAL_SECTION midi_lock;
 static int midi_volume = 127;   /* the game's music volume, 0..127 */
 static uint8_t chan_vol[16];
@@ -132,14 +199,14 @@ static void midi_send(uint32_t msg) {
         chan_vol[c] = (uint8_t)v;
         msg = (msg & 0xFF00FFFF) | ((uint32_t)(v * midi_volume / 127) << 16);
     }
-    midiOutShortMsg(midi, msg);
+    midi_out(msg);
 }
 
 static void midi_all_off(void) {
     if (!midi) return;
     for (int c = 0; c < 16; c++) {
-        midiOutShortMsg(midi, 0xB0 | c | (123 << 8));   /* all notes off */
-        midiOutShortMsg(midi, 0xB0 | c | (121 << 8));   /* reset controllers */
+        midi_out(0xB0 | c | (123 << 8));   /* all notes off */
+        midi_out(0xB0 | c | (121 << 8));   /* reset controllers */
     }
 }
 
@@ -229,10 +296,12 @@ void sos_midi_init_driver(void (*lifted)(void)) {
     static int once;
     if (!once++) {
         InitializeCriticalSection(&midi_lock);
-        if (!sound_mute && !sound_headless && midiOutOpen(&midi, MIDI_MAPPER, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+        if (!sound_mute && !sound_headless && !(midi = midi_open()))
+#ifdef _WIN32
             fprintf(stderr, "[sound] no MIDI device: music off\n");
-            midi = NULL;
-        }
+#else
+            fprintf(stderr, "[sound] no MIDI synth (start FluidSynth or TiMidity++, or set TP_MIDI): music off\n");
+#endif
     }
     M32(ARG(5)) = 0;
     ret(0);
@@ -307,7 +376,7 @@ void music_volume(void (*lifted)(void)) {
     if (midi) {
         EnterCriticalSection(&midi_lock);
         for (int c = 0; c < 16; c++)
-            midiOutShortMsg(midi, 0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
+            midi_out(0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
         LeaveCriticalSection(&midi_lock);
     }
     ret(0);
@@ -345,7 +414,7 @@ void sound_set_mute(int on) {
     if (midi) {
         EnterCriticalSection(&midi_lock);
         for (int c = 0; c < 16; c++)
-            midiOutShortMsg(midi, 0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
+            midi_out(0xB0 | c | (7 << 8) | ((uint32_t)((chan_vol[c] ? chan_vol[c] : 100) * midi_volume / 127) << 16));
         LeaveCriticalSection(&midi_lock);
     }
 }

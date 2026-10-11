@@ -1,0 +1,2 @@
+# Shell scripts run on Linux: LF whatever the checkout's own line endings.
+*.sh text eol=lf

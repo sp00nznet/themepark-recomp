@@ -12,9 +12,7 @@
  * call is a host call, and the game recurses); this thread owns the window.
  * docs/architecture.md has the picture.
  */
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <windowsx.h>
+#include "compat.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,7 +165,11 @@ static void start_record(void) {
     char cmd[1024];
     snprintf(cmd, sizeof cmd, "ffmpeg -loglevel error -y -f rawvideo -pix_fmt bgra -s %dx%d -r 35 -i - "
              "-vf scale=1280:960:flags=neighbor -c:v libx264 -pix_fmt yuv420p \"%s\"", rec_w, rec_h, rec_video);
+#ifdef _WIN32
     rec = _popen(cmd, "wb");
+#else
+    rec = popen(cmd, "w");
+#endif
     if (!rec) fprintf(stderr, "themepark: cannot start ffmpeg\n");
 }
 
@@ -192,8 +194,8 @@ int main(int argc, char** argv) {
     present_load_settings();                 /* themepark.ini; the options below override it */
     {
         char ini[MAX_PATH], v[32];
-        GetModuleFileNameA(NULL, ini, MAX_PATH);
-        strcpy(strrchr(ini, '\\') + 1, "themepark.ini");
+        exe_dir(ini, sizeof ini);
+        strncat(ini, "themepark.ini", sizeof ini - strlen(ini) - 1);
         GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
         if (v[0]) game_fps = atof(v);
         start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
@@ -237,15 +239,14 @@ int main(int argc, char** argv) {
         } else { fprintf(stderr, "themepark: unknown option %s\n", argv[i]); return 2; }
     }
     if (!root[0]) {
-        /* game\ beside the exe, or beside the repo when run from build\ */
+        /* game/ beside the program, or beside the repo when run from build/ */
         char exe[MAX_PATH];
-        GetModuleFileNameA(NULL, exe, MAX_PATH);
-        *strrchr(exe, '\\') = 0;
-        snprintf(root, sizeof root, "%s\\game", exe);
-        if (GetFileAttributesA(root) == INVALID_FILE_ATTRIBUTES) snprintf(root, sizeof root, "%s\\..\\game", exe);
+        exe_dir(exe, sizeof exe);
+        snprintf(root, sizeof root, "%sgame", exe);
+        if (GetFileAttributesA(root) == INVALID_FILE_ATTRIBUTES) snprintf(root, sizeof root, "%s../game", exe);
     }
     if (GetFileAttributesA(root) == INVALID_FILE_ATTRIBUTES) {
-        fprintf(stderr, "themepark: no game folder at %s (run Setup.cmd, or pass --game)\n", root);
+        fprintf(stderr, "themepark: no game folder at %s (run the setup, or pass --game)\n", root);
         return 1;
     }
 
@@ -254,7 +255,7 @@ int main(int argc, char** argv) {
      * beside game\, or any path. Files it has replace the game's for reading. */
     if (mod_name[0]) {
         if (strchr(mod_name, '\\') || strchr(mod_name, '/')) snprintf(overlay, sizeof overlay, "%s", mod_name);
-        else snprintf(overlay, sizeof overlay, "%s\\..\\mods\\%s", root, mod_name);
+        else snprintf(overlay, sizeof overlay, "%s/../mods/%s", root, mod_name);
         if (GetFileAttributesA(overlay) == INVALID_FILE_ATTRIBUTES) {
             fprintf(stderr, "themepark: no mod folder %s\n", overlay);
             return 1;

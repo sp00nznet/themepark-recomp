@@ -8,8 +8,7 @@
  * hundreds of frames a second and all of those race. pace_frame holds each
  * present to the frame rate in game_fps, which is also the speed control.
  */
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "compat.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -30,10 +29,10 @@ void sound_reset(void);          /* sound.c */
 
 void state_path(int slot, char* out, size_t n) {
     char dir[MAX_PATH];
-    GetModuleFileNameA(NULL, dir, MAX_PATH);
-    strcpy(strrchr(dir, '\\') + 1, "states");
+    exe_dir(dir, sizeof dir);
+    strncat(dir, "states", sizeof dir - strlen(dir) - 1);
     CreateDirectoryA(dir, NULL);
-    snprintf(out, n, "%s\\slot%d.tps", dir, slot);
+    snprintf(out, n, "%s/slot%d.tps", dir, slot);
 }
 
 static void do_state(int req) {

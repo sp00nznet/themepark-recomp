@@ -1,7 +1,7 @@
 # Theme Park — static recompilation
 
 A static recompilation of Bullfrog's **Theme Park** (DOS, 1994) to a native
-Windows program. The game's own 32-bit code is translated to C by
+Windows and Linux program. The game's own 32-bit code is translated to C by
 [pcrecomp](https://github.com/sp00nznet/pcrecomp) and runs on its DOS/4GW host;
 no emulator and no DOSBox. You supply your own copy (the GOG release); nothing
 from the game is in this repository.
@@ -41,7 +41,11 @@ What this adds to the 1994 DOS game, beyond running it natively:
   buttons, the D-pad scrolls and the bumpers set the speed.
 - **Mods.** `--mod NAME` lays `mods\NAME` over the game's files without
   touching them.
-- **One-click setup** from your GOG install or GOG's offline installer.
+- **Native on Linux.** The same lifted C built with gcc and SDL2: every
+  feature above, no Wine and no DOSBox. A scripted run leaves the game's memory
+  identical byte for byte to the Windows build's (pcrecomp#84).
+- **One-click setup** from your GOG install or GOG's offline installer
+  (`Setup.cmd` on Windows, `./setup.sh` on Linux).
 - **Headless runs** for testing: scripted input, `--record` to video with
   sound, save and load on cue, and a conformance check.
 
@@ -68,6 +72,7 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 | Save states | 9 slots in the settings menu (F10) |
 | The game's own saves | untested |
 | Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
+| Linux | native (gcc, SDL2): conformance 6/6 and save states checked headless; the window, mouse and pad not yet played by hand; music needs a GM synth on ALSA (FluidSynth, TiMidity++) |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
 main menu, park calendar running, no faults, no unresolved dispatches.
@@ -85,7 +90,7 @@ Real output of the recompiled game.
 
 ## Getting Started
 
-You need Windows 10 or 11 (x64) and Theme Park from GOG: either installed
+You need Windows 10 or 11 (x64), or Linux (below), and Theme Park from GOG: either installed
 through GOG Galaxy, or GOG's offline installer
 (`setup_theme_park_1.01_cs_(77027).exe`).
 
@@ -134,7 +139,7 @@ The Quick start runs exactly these commands.
    minutes). It ends with:
    ```
    ============================================================
-     functions 6517   errors 0   files 17   lines 911,420   8.3s
+     functions 6517   errors 0   files 17   lines 911,510   8.3s
    ============================================================
    ```
 5. Build: `build.cmd`. The result is `build\themepark.exe`.
@@ -144,7 +149,36 @@ Usual trip-ups: `py` vs `python` (above); a path with `&` in it breaks the
 build; a pcrecomp checkout older than the DOS host stops the configure with
 `pcrecomp at ... has no runtime/dos32` — `git -C ..\tools pull`.
 
+### Linux
+
+A native program, built with gcc and SDL2. Checked on Debian 13; any recent
+distribution should do.
+
+1. The packages (Debian and Ubuntu names; `setup.sh` gives Fedora's and Arch's):
+   ```
+   sudo apt install gcc cmake python3 python3-pip git pkg-config libsdl2-dev libasound2-dev innoextract
+   ```
+2. `./setup.sh`, or `./setup.sh /path/to/the/game` (the folder holding
+   `GAME/MAIN.EXE`, or GOG's `setup_theme_park_*.exe`). It does what
+   `Setup.cmd` does: fetches pcrecomp beside this folder as `../tools`, copies
+   the game into `game/`, lifts (pip installs `capstone` and `pefile` for your
+   user if they are missing), builds `build-linux/themepark` and leaves
+   `./themepark.sh`. Run it again and finished steps are skipped.
+3. `./themepark.sh`
+
+Music: Theme Park's score is General MIDI, played on the first synth on ALSA's
+sequencer. Start one before the game, for example
+`fluidsynth -is -a pulseaudio /usr/share/sounds/sf2/FluidR3_GM.sf2` (package
+`fluidsynth` and `fluid-soundfont-gm`) or `timidity -iA`. `TP_MIDI=128:0`
+picks a port by its ALSA address. Without one the game plays its effects and
+no music.
+
+`./build-linux.sh` rebuilds after a change.
+
 ## Usage
+
+On Linux the program is `./themepark.sh` (or `build-linux/themepark`), with
+the same options; its settings menu is a row of dialogs.
 
 ```
 themepark.exe                       play in a window: F10 for the settings menu (save states, window
@@ -165,7 +199,8 @@ themepark.exe --headless --seconds 90 --click 10:160,100 --key 13:14 ...
 
 Click in the picture to play: the window captures the mouse, as the game reads
 how far it moves rather than where it is (which is also how pushing past an
-edge scrolls the park). Alt+Tab, the Windows key or F10 gives it back. In a
+edge scrolls the park). Alt+Tab, the Windows key or F10 gives it back (on
+Linux, F10 or leaving the window). In a
 park, O (or a click on the right-hand ticket booth) opens the gates.
 
 **Save states**: F10, *Save state* or *Load state*, slots 1 to 9, kept in
@@ -188,8 +223,11 @@ time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,
 
 `run_lift.py` then `build.cmd`, as in Step by step. `build.cmd` configures a
 64-bit clang-cl build with Ninja into `build\` (set `BUILD_DIR` for another
-folder, `PCRECOMP` for another toolkit). The lifted C in `src\recomp\gen\` is
-generated from your copy of the game on your machine and is never distributed.
+folder, `PCRECOMP` for another toolkit). On Linux, `python3 run_lift.py` then
+`./build-linux.sh` (gcc, into `build-linux/`). The lift is the same on both
+systems, so either can build from the other's `src/recomp/gen/`. The lifted C
+is generated from your copy of the game on your machine and is never
+distributed.
 
 - [docs/architecture.md](docs/architecture.md): how the pieces fit.
 - [docs/pacing.md](docs/pacing.md): why the game needs a frame limiter it never had.

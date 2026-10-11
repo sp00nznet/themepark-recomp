@@ -12,7 +12,9 @@
   sounds thin.
 - **Quick-save keys and autosave** on top of the save states.
 - **Fixes to the original's own bugs** as they turn up, each documented.
-- **Linux** build of the host (dos32 is Win32 today).
+- **Linux, played by hand**: the window, captured mouse, dialogs and pad have
+  only run headless or briefly; music needs a synth on ALSA, so a bundled
+  soundfont would help here most of all.
 
 ## Housekeeping
 - netlab recipe and QA run on the test VMs.

@@ -14,6 +14,11 @@ song starts are logged as `[sound] song start`). `--wav file` writes the
 effects alone. Headless runs never open an audio or MIDI device. Set
 `TP_REALTIME=1` to run headless on the wall clock instead.
 
+On Linux the same runs are `build-linux/themepark` with the same options, and
+`python3 tools/conformance.py` runs the conformance script against it. The
+same script leaves the game's memory identical on both systems: compare
+`--dump T:file` from each to check a change keeps it so.
+
 Frames for a look: `ffmpeg -ss 30 -i out.mp4 -frames:v 1 shot.png`, or a
 contact sheet: `ffmpeg -i out.mp4 -vf "fps=1/2,scale=320:240,tile=6x4" -frames:v 1 sheet.png`.
 
@@ -83,7 +88,8 @@ build\themepark.exe --seconds 70 <script> --present-test DIR
 runs headless, then draws the last screen through every scaling mode with
 Direct3D into a hidden 1440x1080 window and writes each back buffer to
 `DIR\<mode>.bmp`. It exits non-zero if Direct3D could not draw. This is how
-the shaders are checked when no display can be filmed.
+the shaders are checked when no display can be filmed. On Linux it draws with
+SDL's software renderer into a surface, the same scaling as the window's.
 
 ## Windowed runs
 

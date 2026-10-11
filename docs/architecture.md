@@ -11,18 +11,25 @@ src\recomp\gen\   (generated, gitignored)
    recomp_NNNN.c      6,517 lifted functions
    recomp_dispatch.c  address -> function table, entry point
    image_data.c       the relocated image, copied into guest memory at start
-   │  build.cmd (clang-cl, x64)
+   │  build.cmd (clang-cl, x64)          build-linux.sh (gcc, SDL2)
    ▼
-build\themepark.exe
+build\themepark.exe                    build-linux/themepark
    pcrecomp runtime/dos32/dos32.c   DOS/4GW, DPMI, DOS, BIOS, VGA, mouse, timer (the guest's world)
    src/runtime/main.c               options, the game thread, headless --record, scripted input
-   src/runtime/present.c            the window, keyboard, mouse, themepark.ini
-   src/runtime/present_d3d.c        Direct3D 11 scaling shaders (GDI fallback in present.c)
-   src/runtime/pad.c                an Xbox controller as the mouse and keys
-   src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back
+   src/runtime/present.c            Windows: the window, keyboard, mouse, themepark.ini
+   src/runtime/present_d3d.c        Windows: Direct3D 11 scaling shaders (GDI fallback in present.c)
+   src/runtime/present_sdl.c        Linux: the same window on SDL2, its scaling and dialogs
+   src/runtime/pad.c                an Xbox controller as the mouse and keys (XInput; SDL on Linux)
+   src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back, save states
    src/runtime/sound.c              HMI SOS replaced: effects and music (docs/sound.md)
-   src/runtime/audio.c              the effects mixer on waveOut
+   src/runtime/audio.c              the effects mixer on waveOut (SDL audio on Linux)
+   src/runtime/compat.h, compat.c   Linux: the Win32 names the shared files use (threads, ini)
 ```
+
+The two systems share everything but the window, the sound device, the MIDI
+synth and the pad. On Linux the MIDI goes to ALSA's sequencer (sound.c), and
+the lifted C needs `-foptimize-sibling-calls` from gcc (CMakeLists.txt;
+pcrecomp `docs/DOS32.md` says why).
 
 ## Who owns what
 

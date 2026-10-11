@@ -1,19 +1,22 @@
 /*
- * audio.c - the host's sound: a software mixer on waveOut.
+ * audio.c - the host's sound: a software mixer on waveOut (Linux: SDL audio).
  *
  * The game's digital effects are mixed here instead of by a Sound Blaster.
  * Voices play PCM straight out of guest memory (the game keeps its sample
  * banks loaded), resampled to the output rate with linear interpolation, with
- * the game's volume and pan. One thread feeds waveOut from a ring of blocks;
- * the mix runs on that thread, so the game thread only flips voice fields
- * under a lock.
+ * the game's volume and pan. One thread feeds waveOut from a ring of blocks
+ * (on Linux, SDL's audio thread asks for them); the mix runs on that thread,
+ * so the game thread only flips voice fields under a lock.
  *
  * ponytail: waveOut, not WASAPI: ~60 ms of latency, which a park sim does not
  * notice. Lower it with WASAPI if a game ever needs tighter timing.
  */
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "compat.h"
+#ifdef _WIN32
 #include <mmsystem.h>
+#else
+#include <SDL.h>
+#endif
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -37,13 +40,8 @@ typedef struct {
 
 static voice_t voices[NVOICE];
 static CRITICAL_SECTION lock;
-static HWAVEOUT wo;
-static WAVEHDR hdr[NBLOCK];
-static int16_t buf[NBLOCK][BLOCK * 2];
-static HANDLE ev;
 static int next_id = 1;
 static int master = 127;
-static int started;
 void (*audio_tap)(const int16_t* stereo, int frames);
 
 static int sample(const voice_t* v, uint32_t i) {
@@ -83,6 +81,12 @@ static void mix(int16_t* out, int frames) {
     }
 }
 
+#ifdef _WIN32
+static HWAVEOUT wo;
+static WAVEHDR hdr[NBLOCK];
+static int16_t buf[NBLOCK][BLOCK * 2];
+static HANDLE ev;
+
 static DWORD WINAPI feeder(LPVOID p) {
     (void)p;
     for (;;) {
@@ -113,11 +117,31 @@ int audio_init(int silent) {
         waveOutPrepareHeader(wo, &hdr[b], sizeof hdr[b]);
         hdr[b].dwFlags |= WHDR_DONE;
     }
-    started = 1;
     CloseHandle(CreateThread(NULL, 0, feeder, NULL, 0, NULL));
     SetEvent(ev);
     return 1;
 }
+#else
+static void SDLCALL pull(void* u, Uint8* out, int bytes) {
+    (void)u;
+    audio_render((int16_t*)out, bytes / 4);
+    if (audio_tap) audio_tap((const int16_t*)out, bytes / 4);
+}
+
+int audio_init(int silent) {
+    InitializeCriticalSection(&lock);
+    if (silent) return 0;
+    SDL_AudioSpec want = { 0 }, got;
+    want.freq = RATE; want.format = AUDIO_S16SYS; want.channels = 2; want.samples = BLOCK; want.callback = pull;
+    SDL_AudioDeviceID dev;
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) || !(dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0))) {
+        fprintf(stderr, "[audio] no audio device (%s): running silent\n", SDL_GetError());
+        return 0;
+    }
+    SDL_PauseAudioDevice(dev, 0);
+    return 1;
+}
+#endif
 
 /* Headless runs mix on demand: --record pulls 1/35 s of sound per frame. */
 void audio_render(int16_t* stereo, int frames) {

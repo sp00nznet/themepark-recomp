@@ -53,7 +53,7 @@ count (0xFFFF for ever), +0x10 volume (0x7FFF full), +0x12 sample id, +0x1C
 flags (0x4000 looped). The game never pans or changes rate.
 
 `audio.c` mixes up to 32 voices from guest memory to 44.1 kHz stereo on
-waveOut. Headless runs mix on the 70 Hz frame clock instead, so `--record`
+waveOut (SDL audio on Linux). Headless runs mix on the 70 Hz frame clock instead, so `--record`
 carries the effects.
 
 ## Music
@@ -70,7 +70,9 @@ with a standalone reader). Songs play while a ride is shown, which is why an
 empty new park is silent.
 
 The host sequencer merges the tracks and plays them on the Windows General
-MIDI synth (`MIDI_MAPPER`), at 120 ticks per second scaled by the game's tempo
+MIDI synth (`MIDI_MAPPER`), or on Linux on the first synth port of ALSA's
+sequencer (FluidSynth or TiMidity++ as a server; `TP_MIDI=client:port` picks
+one), at 120 ticks per second scaled by the game's tempo
 percentage. The game's music volume scales each channel's CC 7. Headless runs
 open no MIDI device; a song "plays" for its length in guest time so the game
 sees it finish, and each start is logged:
