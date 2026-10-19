@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "dos32.h"
 
 double game_fps = 25.0;   /* about what a fast 486 managed; main.c --fps */
@@ -54,11 +55,10 @@ static void do_state(int req) {
     state_note_until = GetTickCount() + 4000;
 }
 
-void pace_frame(void (*lifted)(void)) {
-    int req = state_request;
-    if (req) { state_request = 0; do_state(req); }
-    if (game_fps <= 0) { lifted(); return; }   /* --fps 0: flat out, as on DOS */
-    if (dos32_virtual_clock) { dos32_advance(1.0 / game_fps); lifted(); return; }
+/* Hold the caller until the next frame is due. */
+static void pace_wait(void) {
+    if (game_fps <= 0) return;   /* --fps 0: flat out, as on DOS */
+    if (dos32_virtual_clock) { dos32_advance(1.0 / game_fps); return; }
     static LARGE_INTEGER f, t;
     if (!f.QuadPart) QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&t);
@@ -66,6 +66,46 @@ void pace_frame(void (*lifted)(void)) {
     if (next_s - now > 1.0 || now - next_s > 0.25) next_s = now;   /* first frame, or a long stall */
     if (next_s > now) dos32_idle(next_s - now);
     next_s += 1.0 / game_fps;
+}
+
+static int polled;   /* the input poll ran since the last present */
+
+void pace_frame(void (*lifted)(void)) {
+    int req = state_request;
+    if (req) { state_request = 0; do_state(req); }
+    polled = 1;
+    pace_wait();
+    lifted();
+}
+
+/* The two presents (0x470210 copies the 320x200 back buffer to the screen,
+ * 0x445507 draws the pointer and shows a 640x480 frame). Some loops present
+ * without ever calling the input poll: the year-end report, which closes
+ * itself after 1000 passes with the mouse still, and the staff and goods
+ * negotiations, whose clock counts passes. On a 486 each pass redrew the
+ * screen and took a good fraction of a second; native, all 1000 go by in one
+ * frame. A frame that did not go through the poll is paced here instead, so
+ * every loop runs at the frame rate and none is paced twice. */
+void pace_present(void (*lifted)(void)) {
+    if (!polled) pace_wait();
+    polled = 0;
+    lifted();
+}
+
+/* The wait for vertical retrace (0x470BE4). The staff and goods negotiation
+ * (0x434EA5) has a loop of its own that copies each frame to the screen
+ * itself and waits for one retrace a pass. It lasts 620 passes, the other
+ * side answering every 62; on a 486 a pass took a frame or two, but native,
+ * several passes fit in one retrace and the whole negotiation was over in
+ * two or three seconds. Its passes are frames, paced like every other.
+ * The palette fades wait for retrace too, many times a frame, and keep the
+ * plain 70 Hz wait. */
+extern uint32_t g_cur_func;
+void pace_retrace(void (*lifted)(void)) {
+    if (g_cur_func >= 0x00434EA5u && g_cur_func < 0x00436F27u) {
+        if (!polled) pace_wait();
+        polled = 0;
+    }
     lifted();
 }
 

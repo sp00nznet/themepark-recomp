@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
+  screams on rides) repeated their opening for ever and only stopped when
+  sound was turned off and on: the mixer's play position wrapped at 65536
+  frames (#1).
+- The year-end report and charts flashed up and closed at once: their loop
+  never calls the input poll that paces the game, and closes itself after
+  1000 passes. Frames are now also paced where they are shown (#4).
+- Staff and goods negotiations were over in two or three seconds, too quick
+  to make an offer: their loop paces itself on the vertical retrace only.
+  Each pass is now a frame, and a negotiation takes about 18 s at the default
+  speed (#5).
 - The mouse drifted on its own (laying a path to the right also laid it
   downward) and pushing at the screen's edge barely scrolled: the game reads
   how far the mouse moved from where it last put its cursor, and the host fed

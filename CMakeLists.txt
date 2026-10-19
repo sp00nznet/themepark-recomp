@@ -64,3 +64,12 @@ endif()
 target_include_directories(themepark PRIVATE
   ${PCRECOMP}/runtime/recomp32 ${PCRECOMP}/runtime/dos32 src/recomp/gen src/runtime)
 target_compile_definitions(themepark PRIVATE RECOMP_YIELD_EVERY=256u)
+
+# A debugging build (-DTP_TRACE=ON, in a build dir of its own): every lifted
+# function counts its entries, and TP_TRACE=T0,T1 prints which ran between
+# those guest seconds (src/runtime/trace.c). Slower; never for release.
+option(TP_TRACE "count lifted function entries (debugging)" OFF)
+if(TP_TRACE)
+  target_sources(themepark PRIVATE src/runtime/trace.c)
+  target_compile_definitions(themepark PRIVATE RECOMP_TRACE)
+endif()

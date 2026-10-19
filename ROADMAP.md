@@ -2,8 +2,6 @@
 
 ## Next
 - **Long play**: a year of park time scripted, with no fault and saves loading.
-- **The bus sound** that a player heard repeat without end: not reproduced
-  headless yet (`TP_SNDLOG`).
 - **A volume slider** in the settings menu.
 
 ## Then: the remaster

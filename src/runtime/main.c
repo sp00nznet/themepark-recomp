@@ -48,7 +48,7 @@ static char dump_path[8][MAX_PATH];
 static int ndump;
 static ev_t evs[256];
 static int nev;
-static long frame_no;
+long frame_no;               /* 70 Hz frames of guest time; sound.c logs with it */
 
 static void add_event(int kind, const char* spec) {
     double t; int a = 0, b = 0;
@@ -107,6 +107,15 @@ static void on_retrace(void) {
      * first time a park opens. Menus stay 320x200, as the game draws them. */
     if (frame_no == 1 && start_hires) *dos32_mem(0x4A1510) = 1;
     run_events();
+#ifdef RECOMP_TRACE
+    {   /* the trace build: TP_TRACE=T0,T1 */
+        extern int trace_on; void trace_report(void);
+        static double t0 = -1, t1;
+        if (t0 < 0) { const char* e = getenv("TP_TRACE"); t0 = e ? atof(e) : 0; t1 = e && strchr(e, ',') ? atof(strchr(e, ',') + 1) : 0; }
+        if (t1 > 0 && frame_no == (long)(t0 * 70)) trace_on = 1;
+        if (t1 > 0 && frame_no == (long)(t1 * 70)) { trace_on = 0; trace_report(); }
+    }
+#endif
     for (int i = 0; i < nwatch; i++) {     /* --watch: log a guest word when it changes */
         uint16_t v = *(uint16_t*)dos32_mem(watch[i]);
         if (v != watch_v[i] || frame_no == 1) {

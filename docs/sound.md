@@ -53,7 +53,11 @@ count (0xFFFF for ever), +0x10 volume (0x7FFF full), +0x12 sample id, +0x1C
 flags (0x4000 looped). The game never pans or changes rate.
 
 `audio.c` mixes up to 32 voices from guest memory to 44.1 kHz stereo on
-waveOut (SDL audio on Linux). Headless runs mix on the 70 Hz frame clock instead, so `--record`
+waveOut (SDL audio on Linux). A voice's position is 48.16 fixed point: it was
+16.16 in 32 bits, which wraps at 65536 frames, so every effect longer than
+1.5 s at 44.1 kHz (the bus arriving and leaving, fireworks, the screams on
+rides) replayed its first 1.5 s for ever and never reported itself finished
+(issue #1). Headless runs mix on the 70 Hz frame clock instead, so `--record`
 carries the effects.
 
 ## Music
