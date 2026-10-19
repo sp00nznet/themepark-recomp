@@ -65,3 +65,30 @@ Pacing by the wall clock would make scripted tests depend on the host's speed
 runs on a virtual clock: `pace_frame` advances guest time by exactly 1/fps per
 frame instead of sleeping. The same script is then the same run, and 90 guest
 seconds take about 5 real ones.
+
+## Loops that never poll
+
+Pacing at the input poll covers every loop that calls it. Two kinds of screen
+don't (issues #4 and #5):
+
+- **The year-end report** (`0x464B84`–`0x4667A7`) presents each pass through
+  `0x470210` (320x200) or `0x445507` (640x480) and closes itself after 1000
+  passes with the mouse still. On a 486 each pass redrew the screen; native,
+  all 1000 went by inside one frame and the report flashed and vanished.
+- **The staff and goods negotiation** (`0x434EA5`, state `0x32` staff, `0x4E`
+  goods) copies its frames to the screen itself and waits for one vertical
+  retrace a pass (`0x470BE4`). It lasts 620 passes, the other side answering
+  every 62. Several passes fit inside one 70 Hz retrace pulse natively, so it
+  was over in two or three seconds.
+
+`pace_present` and `pace_retrace` (game.c) pace those frames at the same rate
+as the rest: a present, or a negotiation's retrace wait, holds for the next
+frame only when the input poll has not run since the last one, so the park's
+own frames (poll, then present) are still paced once. The retrace wait is
+paced only when called from the negotiation; the palette fades call it many
+times a frame and keep the plain 70 Hz wait.
+
+At 25 fps the report stays up about 15 s if left alone (a click closes it
+sooner) and a negotiation takes about 18 s. How they were found: `TP_TRACE`
+(testing.md) over the frame the report flashed in showed a block of functions
+entered exactly 1000 times.

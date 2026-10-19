@@ -44,8 +44,15 @@ All times are guest seconds; positions are game pixels (320x200 in the menus,
 | `--log` | dos32's log: ints, file opens, vector installs, DPMI allocations, port read counts |
 | `--watch addr` | print a guest word whenever it changes (up to 8) |
 | `--dump T:file` | write guest memory from 0x400000 to the heap top (0x5000000) to a file at T (diff two to find a variable) |
-| `TP_SNDLOG=1` | log every effect start, stop and volume change and every MIDI message the game sends |
+| `TP_SNDLOG=1` | log every effect start, stop and volume change and every MIDI message the game sends, with the guest time |
 | `DOS32_BREAK=addr` | hardware write watchpoint: every write to the word, with the lifted function that made it |
+
+**The trace build.** Configure a build directory of its own with
+`-DTP_TRACE=ON` (`cmake -B build-trace -DTP_TRACE=ON`, then `BUILD_DIR=build-trace build.cmd`):
+every lifted function counts its entries, and `TP_TRACE=T0,T1` prints which
+ran between those guest seconds, in order of first entry, with counts. Trace
+a window around something seen on screen and one ordinary window, and the
+difference is the code behind it. Slower; never for release.
 
 Unhandled ints and ports are always reported once each. A guest fault prints
 the guest address, the lifted function, registers, the last indirect calls and

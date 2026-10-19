@@ -56,6 +56,11 @@ OVERRIDES = {
     # pace was however long a frame took; native, every one of those loops
     # spins thousands of times a second. Pacing here restores the speed.
     0x0040107F: 'pace_frame',
+    # The presents: loops that never poll (the year-end report, the
+    # negotiations) are paced where they show a frame (game.c).
+    0x00470210: 'pace_present', 0x00445507: 'pace_present',
+    # The wait for retrace: the negotiations' own loop is paced here.
+    0x00470BE4: 'pace_retrace',
     # Bullfrog's memory manager grabs all memory: leave the C library some.
     0x00472950: 'hold_back_memory',
     # HMI SOS, replaced at its edge (src/runtime/sound.c, docs/sound.md).

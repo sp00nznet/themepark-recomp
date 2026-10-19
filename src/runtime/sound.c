@@ -44,6 +44,7 @@ static void ret(uint32_t v) { g_eax = v; g_esp += 4; }
 #define NOOP_FN     0x0046E2A0u /* a lifted `ret`: where the driver's mixer tick points */
 
 int sound_mute;                 /* --mute */
+extern long frame_no;           /* main.c: for TP_SNDLOG */
 int sound_headless;             /* no devices: effects mixed for --record, music logged */
 
 /* ---- drivers: there are none ------------------------------------------- */
@@ -78,7 +79,7 @@ void sos_digi_start(void (*lifted)(void)) {
     int variant = M8(VARIANT);
     int rate = variant == 2 ? 44100 : variant == 1 ? 22050 : 11025;
     int loop = !(flags & 0x4000) ? 0 : loops == 0xFFFF ? -1 : loops > 0 ? loops - 1 : 0;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] start id %d data %08X len %u loops %d flags %04X vol %d ret %08X\n", id, data, len, loops, flags, vol, M32(g_esp));
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d ret %08X\n", frame_no / 70.0, id, data, len, loops, flags, vol, M32(g_esp));
     audio_stop(voice_of[id]);
     voice_of[id] = sound_mute ? 0 : audio_play(dos32_mem(data), len, variant == 2 ? 16 : 8, variant == 2, rate,
                                                 vol >> 8, 64, loop);
@@ -92,7 +93,7 @@ void sos_digi_done(void (*lifted)(void)) { (void)lifted; ret(!audio_playing(voic
 void sos_digi_stop(void (*lifted)(void)) {
     (void)lifted;
     int id = ARG(1) & 255;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] stop id %d\n", id);
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f stop id %d\n", frame_no / 70.0, id);
     audio_stop(voice_of[id]);
     voice_of[id] = 0;
     ret(0);
@@ -101,7 +102,7 @@ void sos_digi_stop(void (*lifted)(void)) {
 /* sosDIGISetSampleVolume(h, id, vol 0..0x7FFF) */
 void sos_digi_volume(void (*lifted)(void)) {
     (void)lifted;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] vol id %d %d\n", ARG(1) & 255, ARG(2) & 0xFFFF);
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f vol id %d %d\n", frame_no / 70.0, ARG(1) & 255, ARG(2) & 0xFFFF);
     audio_set(voice_of[ARG(1) & 255], (int)(ARG(2) & 0xFFFF) >> 8, -1, -1);
     ret(0);
 }
@@ -388,7 +389,7 @@ void sos_midi_send(void (*lifted)(void)) {
     (void)lifted;
     const uint8_t* p = dos32_mem(ARG(1));
     uint32_t len = ARG(3) & 0xFFFF;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] midi %u: %02X %02X %02X\n", len, p[0], p[1], p[2]);
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f midi %u: %02X %02X %02X\n", frame_no / 70.0, len, p[0], p[1], p[2]);
     if (midi && len >= 1 && len <= 3) {
         uint32_t msg = p[0] | (len > 1 ? (uint32_t)p[1] << 8 : 0) | (len > 2 ? (uint32_t)p[2] << 16 : 0);
         EnterCriticalSection(&midi_lock);

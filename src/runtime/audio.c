@@ -31,7 +31,7 @@
 typedef struct {
     const uint8_t* data;
     uint32_t len;                 /* in sample frames */
-    uint32_t pos_fx;              /* 16.16 position */
+    uint64_t pos_fx;              /* 48.16 position: 16.16 in 32 bits wrapped at 65536 frames (1.5 s at 44.1 kHz) */
     uint32_t step_fx;             /* 16.16 per output frame */
     int bits, is_signed, loop;   /* loop: repeats left, -1 forever */
     int vol, pan;                 /* 0..127, 0..127 (64 = centre) */
@@ -61,11 +61,11 @@ static void mix(int16_t* out, int frames) {
         if (gl > 127) gl = 127;
         if (gr > 127) gr = 127;
         for (int f = 0; f < frames; f++) {
-            uint32_t i = v->pos_fx >> 16;
+            uint32_t i = (uint32_t)(v->pos_fx >> 16);
             if (i >= v->len) {
                 if (!v->loop) { v->id = 0; break; }
                 if (v->loop > 0) v->loop--;          /* -1 loops forever */
-                v->pos_fx -= v->len << 16; i = v->pos_fx >> 16;
+                v->pos_fx -= (uint64_t)v->len << 16; i = (uint32_t)(v->pos_fx >> 16);
             }
             int a = sample(v, i), b = i + 1 < v->len ? sample(v, i + 1) : a;
             int s = a + (int)(((int64_t)(b - a) * (v->pos_fx & 0xFFFF)) >> 16);
