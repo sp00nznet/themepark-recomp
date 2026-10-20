@@ -92,3 +92,21 @@ At 25 fps the report stays up about 15 s if left alone (a click closes it
 sooner) and a negotiation takes about 18 s. How they were found: `TP_TRACE`
 (testing.md) over the frame the report flashed in showed a block of functions
 entered exactly 1000 times.
+
+## Films (issue #10)
+
+The films have clocks of their own, and both broke differently.
+
+- **Ride films** (`RIDEANI.nnn`, the spyglass in a ride's window; player
+  `0x450C44`, called from `0x44C04F`) wait on the DOS time of day between
+  frames (`0x45123D`, int 21h `2Ch`): 2 hundredths in 320x200, 8 in 640x480.
+  DOS keeps that clock in BIOS ticks, so it moves in steps of 1/18.2 s, and
+  the waits were really one tick and two: about 18 and 9 frames a second.
+  dos32 answered to the hundredth, and the 320x200 film played at 50. dos32
+  now steps the time of day in ticks (pcrecomp#121); measured, 18.3.
+- **Takeover and game-over films** (`TAKOVER.ANM`, `BUSTED.ANM`; `0x44C7D1`)
+  wait one retrace a pass and present it, and in 320x200 decode a new frame
+  every 4th pass: 70 / 4 = 17.5 frames a second. Their presents went through
+  `pace_present` at the game's 25 fps, so 320x200 showed 6. `pace_present`
+  leaves that loop to its retrace wait, and in 640x480, where a new frame
+  comes every pass, holds each pass to 4/70 s for the same 17.5.
