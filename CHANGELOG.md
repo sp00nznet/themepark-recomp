@@ -5,7 +5,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0-alpha.1] - 2026-10-20
+
 ### Added
+- An installer for Windows and Linux (recomp-launcher): it finds GOG's
+  install, or takes the 1994 CD's drive or GOG's offline installer, and
+  builds the recomp from it on the player's machine. Nothing of the game is
+  in it. Each release carries both.
 - The original 1994 CD works as well as GOG's release (#19). Its MAIN.EXE is
   GOG's but for two mouse fixes GOG made, which `run_lift.py` now applies, so
   both lift to the same C. Setup takes the CD's drive or folder and lays out
@@ -50,6 +56,40 @@ versions follow [SemVer](https://semver.org/).
   and resume, without the command line. Loading a save state is off in a
   network game.
 
+- Linux, natively: the same lifted C built with gcc and SDL2
+  (`./setup.sh`, `./build-linux.sh`). An SDL window with every scaling mode,
+  the captured mouse, the settings menu as dialogs, SDL audio for the
+  effects, music on ALSA's sequencer, and the pad as an SDL GameController.
+  Conformance is 6/6, save states load across runs, and the guest memory
+  after a scripted run is identical to the Windows build's (needs
+  pcrecomp#84).
+- Save states: 9 slots in the settings menu, about 8 MB each, loading in a
+  park in the same session or a later one (needs pcrecomp#77). `--save` and
+  `--load` for scripted runs.
+- Pixels doubled up by default: integer scaling (nearest, whole multiples)
+  in a window of 1x, 2x or 3x the park's 640x480, picked in the settings menu
+  and remembered; the largest that fits to start (2x on a 1080p screen).
+- `--move T:dx,dy` (relative mouse motion) for scripted runs; `TP_SNDLOG=1`
+  logs the game's sound calls.
+- Mods: `--mod NAME` lays `mods\NAME` over the game's files (needs
+  pcrecomp#73).
+- Settings menu on F10 or a right-click on the bars: scaling, colour, speed,
+  fullscreen, mute and whether parks open in 640x480.
+- Xbox controller (XInput, loaded at run time) as the mouse and keys.
+- Parks open in the game's own 640x480 SVGA mode (it shipped behind the R
+  key); `--lowres` / `[game] hires=0` for the original default.
+- Speed control: Ctrl+PgUp / Ctrl+PgDn steps the game from 12 to 120 frames
+  per second, shown in the title bar and remembered.
+- Sound: HMI SOS replaced at its API (docs/sound.md). Effects from the 44.1 kHz
+  16-bit bank through a host mixer on waveOut; the game's General MIDI songs
+  through a host HMP sequencer on the Windows synth. `--mute`; headless
+  `--record` carries the effects, `--wav` writes them alone.
+- Direct3D 11 presenter (gunman's shaders): sharp-bilinear, smooth, CRT,
+  nearest and integer scaling on F12, vivid colour on F9, borderless
+  fullscreen on F11 / Alt+Enter, vsync; GDI when Direct3D is unavailable.
+  Choices kept in `themepark.ini`, with `--scale`, `--fullscreen`, `--gdi`,
+  `--vsync` and `[game] fps`.
+
 ### Fixed
 - The pointer came apart, from the top down, after a long game (#6). Every
   change of resolution (R, and the screens that switch) ran the mouse
@@ -91,41 +131,6 @@ versions follow [SemVer](https://semver.org/).
 - Sound init never ran: the game's memory manager took every block and the
   C library could not open SNDSETUP.INF; 1 MB is held back while it grabs
   (needs pcrecomp#70).
-
-### Added
-- Linux, natively: the same lifted C built with gcc and SDL2
-  (`./setup.sh`, `./build-linux.sh`). An SDL window with every scaling mode,
-  the captured mouse, the settings menu as dialogs, SDL audio for the
-  effects, music on ALSA's sequencer, and the pad as an SDL GameController.
-  Conformance is 6/6, save states load across runs, and the guest memory
-  after a scripted run is identical to the Windows build's (needs
-  pcrecomp#84).
-- Save states: 9 slots in the settings menu, about 8 MB each, loading in a
-  park in the same session or a later one (needs pcrecomp#77). `--save` and
-  `--load` for scripted runs.
-- Pixels doubled up by default: integer scaling (nearest, whole multiples)
-  in a window of 1x, 2x or 3x the park's 640x480, picked in the settings menu
-  and remembered; the largest that fits to start (2x on a 1080p screen).
-- `--move T:dx,dy` (relative mouse motion) for scripted runs; `TP_SNDLOG=1`
-  logs the game's sound calls.
-- Mods: `--mod NAME` lays `mods\NAME` over the game's files (needs
-  pcrecomp#73).
-- Settings menu on F10 or a right-click on the bars: scaling, colour, speed,
-  fullscreen, mute and whether parks open in 640x480.
-- Xbox controller (XInput, loaded at run time) as the mouse and keys.
-- Parks open in the game's own 640x480 SVGA mode (it shipped behind the R
-  key); `--lowres` / `[game] hires=0` for the original default.
-- Speed control: Ctrl+PgUp / Ctrl+PgDn steps the game from 12 to 120 frames
-  per second, shown in the title bar and remembered.
-- Sound: HMI SOS replaced at its API (docs/sound.md). Effects from the 44.1 kHz
-  16-bit bank through a host mixer on waveOut; the game's General MIDI songs
-  through a host HMP sequencer on the Windows synth. `--mute`; headless
-  `--record` carries the effects, `--wav` writes them alone.
-- Direct3D 11 presenter (gunman's shaders): sharp-bilinear, smooth, CRT,
-  nearest and integer scaling on F12, vivid colour on F9, borderless
-  fullscreen on F11 / Alt+Enter, vsync; GDI when Direct3D is unavailable.
-  Choices kept in `themepark.ini`, with `--scale`, `--fullscreen`, `--gdi`,
-  `--vsync` and `[game] fps`.
 
 ## [0.1.0] - 2026-10-10
 

@@ -108,6 +108,27 @@ The CD's MAIN.EXE is GOG's except for two small mouse fixes GOG made, which
 store copy, other languages' discs) are untested: `run_lift.py` stops and
 prints the file's SHA-1, and an issue with that is welcome.
 
+### The installer (easiest)
+
+From the [releases](https://github.com/sp00nznet/themepark-recomp/releases),
+download the installer for your system:
+`ThemePark-Recomp-Installer-windows-x64.exe`, or
+`ThemePark-Recomp-Installer-linux-x64.tar.gz` (unpack it, then run it).
+
+1. It finds GOG's install by itself. Otherwise, **Choose folder…** and pick
+   one of these:
+   - the Theme Park folder;
+   - the CD's drive (a mounted ISO works too);
+   - the folder holding GOG's `setup_theme_park_*.exe`.
+2. **Build**: it downloads this repository and pcrecomp, then runs the same
+   setup as below with no questions. On Windows, a first build installs the
+   compilers it needs. On Linux, it tells you which packages to install.
+3. **Play**. Next time it opens straight to this.
+
+Nothing of the game is in the installer. The build is made from your copy and
+stays on your machine. The installer isn't signed: Windows SmartScreen asks
+first (**More info**, **Run anyway**).
+
 ### Quick start
 
 1. Download this repository (green **Code** button, **Download ZIP**) and unzip
