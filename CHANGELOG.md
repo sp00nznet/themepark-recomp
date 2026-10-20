@@ -10,9 +10,11 @@ versions follow [SemVer](https://semver.org/).
   change of resolution (R, and the screens that switch) ran the mouse
   set-up, which took three new 4 KB buffers from the game's memory pool and
   never gave them back; GOG's patch stops that by rewriting the game's own
-  code, which does nothing to the lifted C. After about 60 switches the pool
-  was empty and the pointer was drawn from address 0. The buffers are now
-  taken once, as GOG meant.
+  code, which does nothing to the lifted C. The pool keeps its blocks in a
+  table of 256, and after about 60 switches it was full: the pointer was
+  drawn from address 0, and from then on every allocation in the game failed
+  (films and screens load into that pool too). The buffers are now taken
+  once, as GOG meant.
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when
   sound was turned off and on: the mixer's play position wrapped at 65536
