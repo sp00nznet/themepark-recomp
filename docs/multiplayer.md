@@ -172,8 +172,8 @@ its own. These functions are taken over (`run_lift.py` `OVERRIDES`):
 | `0x439414` | make the sessions | fill in what they would have: player count `0x4A91A9`, own number `0x4A91A7`, the slot table `0x4C7810` |
 | `0x438F65` | send on a session | send to that player |
 | `0x4390DF` | receive on a session | wait for exactly that many bytes from that player |
-| `0x41CCF8` | the command dispatcher | note who called it (below) |
-| `0x4399F2` | the frame's exchange | checkpoints, rollbacks and house rules, then the game's own |
+| `0x41CCF8` | the command dispatcher | who called it, and checkpoints and rollbacks (below) |
+| `0x4399F2` | the frame's exchange | house rules, and the count of frames in step |
 | `0x439B20` | hang up | close the links |
 
 Which player a send or receive is for comes from its session block: the
@@ -193,13 +193,21 @@ checkpoint and each rollback.
 
 A checkpoint has to be taken where every machine is at the same point of the
 game's traffic, and where a machine that has just started can get back to.
-The frame's exchange is the first: each machine has sent and received the
-same frames when it gets there. For the second it must be called from the
-main loop's frame (`0x40226C`, which runs in every state of the game, the
-title included, at one depth of the stack) and not from a screen's own loop
-(the year-end report `0x464B84`, the barrier `0x466DB5`, `0x46B78D`,
-`0x46C03E`). The lifted code pushes a dummy return address, so the caller is
-told by the dispatcher's override, which sees its caller in `g_cur_func`.
+The command dispatcher (`0x41CCF8`) is the first: its first act is the
+frame's exchange, so at its start each machine has sent and received the
+same frames. For the second it must be called from the main loop's frame
+(`0x40226C`, which runs in every state of the game except the title, at one
+depth of the stack) and not from a screen's own loop (the year-end report
+`0x464B84`, the barrier `0x466DB5`, `0x46B78D`, `0x46C03E`). The lifted code
+pushes a dummy return address, so the caller is told by the dispatcher's
+override, which sees its caller in `g_cur_func`.
+
+A pcrecomp save state loads only where the host's own C stack is as deep as
+when it was saved (the lifted code above would otherwise return into the
+wrong frames). So the checkpoint is one function, called unconditionally at
+the top of the dispatcher's override, and the save or load inside it is one
+indirect call: with a call site for each, gcc placed them 16 bytes apart and
+no checkpoint would load on Linux.
 
 Frames are counted from the moment the sessions exist (`0x4A91AB`), so every
 machine's frame N is the same frame. Every 750 of them (`TP_NET_CP`) each
@@ -273,12 +281,19 @@ does it again (2, 3 and 4 pass), and `--rejoin` the crash and rejoin.
   the host comes back with `--resume` and a click; both go back to frame
   1350, and the host's thugs reach player 2.
 - **Both clocks:** the virtual clock and real time (`TP_REALTIME=1`).
-- One-player conformance is unchanged (6/6). The network files compile
-  warning-free on Linux.
+- **Linux:** the same checks pass natively (gcc, WSL Debian): 2 and 4
+  players, the house rules and the rejoin. Player 2's park after the rejoin
+  has the same cash on Linux as on Windows.
+- One-player conformance is unchanged (6/6), on both.
+
+Two bugs only Linux showed, both fixed: a blocking `recv` that dos32's timer
+signal interrupts returns `EINTR`, which is now retried rather than taken
+for a lost player (and `send` uses `MSG_NOSIGNAL`); and the save and load
+call sites above.
 
 Not tested yet: the settings menu's *Network game* by hand (it is built on
 Windows and Linux, not yet clicked), two players at windows, over a real LAN,
-or with Linux and Windows mixed; a long game; a drop during the year end; the
+or with Linux and Windows on one game; a long game; a drop during the year end; the
 stock market and the other shared opcodes (`0x3C`, `0x3E`, `0x5A`) in play;
 and the multiplayer-only panel at `0x46BFFD`. A note in the code also says
 buying shares skips the money check in a network game (`0x446AFA`,

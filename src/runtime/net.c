@@ -32,8 +32,8 @@
  *   0x439414  connect the sessions the handshake already did it: fill the tables
  *   0x438F65  send on a session   to that player
  *   0x4390DF  receive             from that player
- *   0x41CCF8  the command dispatcher  who called it (the main loop, or a screen's)
- *   0x4399F2  the frame's exchange checkpoints, and rollbacks
+ *   0x41CCF8  the command dispatcher  who called it; checkpoints and rollbacks
+ *   0x4399F2  the frame's exchange  house rules, the count of frames in step
  *   0x439B20  hang up             close
  */
 #ifdef _WIN32
@@ -41,6 +41,7 @@
 #include <ws2tcpip.h>
 #include <process.h>
 #define getpid _getpid
+#define MSG_NOSIGNAL 0           /* Windows has no SIGPIPE */
 #else
 #include "compat.h"
 #include <sys/socket.h>
@@ -52,6 +53,7 @@ typedef int SOCKET;
 #define INVALID_SOCKET (-1)
 #define closesocket close
 #endif
+#include <errno.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -142,7 +144,8 @@ static void die(const char* what) {
 
 static int all(SOCKET s, void* p, size_t len, int rx) {
     for (char* c = p; len; ) {
-        int k = rx ? recv(s, c, (int)len, 0) : send(s, c, (int)len, 0);
+        int k = rx ? recv(s, c, (int)len, 0) : send(s, c, (int)len, MSG_NOSIGNAL);
+        if (k < 0 && errno == EINTR) continue;   /* Linux: dos32's timer signal, not a lost player */
         if (k <= 0) return -1;
         c += k; len -= (size_t)k;
     }
@@ -562,23 +565,36 @@ void net_receive(void (*lifted)(void)) {
     ret(len);
 }
 
-/* 0x4399F2: the frame's exchange. Checkpoints and rollbacks happen here, on
- * the park's own frame, the one place every machine passes at the same point
- * of the game's traffic and a restarted one can always get back to. */
-void net_exchange(void (*lifted)(void)) {
-    int main_loop = from_frame_tick;   /* not a screen's own loop */
+/* Checkpoints and rollbacks: at the start of the dispatcher when the main
+ * loop's frame calls it, just before the frame's exchange. That is the one
+ * place every machine passes at the same point of the game's traffic, and a
+ * restarted one can always get back to (the title's next screen runs it).
+ *
+ * A state loads only where the host's own stack is as deep as when it was
+ * saved. So this is one call, made unconditionally at the top of
+ * net_dispatch, and the save or the load is one indirect call inside it: with
+ * two call sites gcc put them 16 bytes apart, and nothing would load. */
+#ifdef _MSC_VER
+#define NOINLINE __declspec(noinline)
+#else
+#define NOINLINE __attribute__((noinline))
+#endif
+static NOINLINE void checkpoint(int main_loop) {
+    if (!net_n) return;                /* a one-player game: the dispatcher runs every frame */
     int live = M8(NET_DONE) != 0;      /* in step with the others: the sessions are made */
-    char p[MAX_PATH];
+    char p[MAX_PATH], tmp[MAX_PATH];
     EnterCriticalSection(&lk);
-    int back = resync && rollback_to != 0xFFFFFFFFu && main_loop;   /* even on the title screen */
+    int back = resync && rollback_to != 0xFFFFFFFFu && main_loop;   /* even on the screen after the title */
     uint32_t to = rollback_to;
     LeaveCriticalSection(&lk);
-    int loaded = 0;
+    int save = !back && !resync && live && main_loop && frame && frame % (uint32_t)checkpoint_every == 0;
+    if (!back && !save) return;
+    cp_path(net_me, back ? to : frame, p, sizeof p);
+    snprintf(tmp, sizeof tmp, "%s.part", p);
+    int (*volatile io)(const char*, uint32_t) = back ? dos32_state_load : dos32_state_save;
+    int r = io(back ? p : tmp, EXCHANGE);
     if (back) {
-        cp_path(net_me, to, p, sizeof p);
-        int r = dos32_state_load(p, EXCHANGE);
         if (r == 0) {
-            loaded = 1;
             sound_reset();
             EnterCriticalSection(&lk);
             if (rollback_to == to) { resync = 0; rollback_to = 0xFFFFFFFFu; frame = to; }
@@ -588,11 +604,8 @@ void net_exchange(void (*lifted)(void)) {
         } else if (r == -1) die("this machine's checkpoint is missing: the game cannot carry on");
         else { static int k; if (k++ < 3) logx("checkpoint %u does not load here yet (esp %08x)", to, g_esp); }
     }
-    if (!resync && !loaded && live && main_loop && frame && frame % (uint32_t)checkpoint_every == 0) {
-        char tmp[MAX_PATH];
-        cp_path(net_me, frame, p, sizeof p);
-        snprintf(tmp, sizeof tmp, "%s.part", p);
-        if (dos32_state_save(tmp, EXCHANGE) == 0) {
+    else if (save) {
+        if (r == 0) {
             remove(p);
             rename(tmp, p);
             EnterCriticalSection(&lk);
@@ -604,15 +617,23 @@ void net_exchange(void (*lifted)(void)) {
             logx("checkpoint at frame %u", frame);
         }
     }
-    net_actions_apply(live && main_loop && !resync);
+}
+
+/* 0x4399F2: the frame's exchange. House rules are done here, between steps
+ * of the park, and the frames in step are counted. */
+void net_exchange(void (*lifted)(void)) {
+    int live = M8(NET_DONE) != 0;
+    net_actions_apply(live && from_frame_tick && !resync);
     lifted();
     if (!resync && live) frame++;
 }
 
-/* 0x41CCF8, the command dispatcher (it calls the exchange): who called it. */
+/* 0x41CCF8, the command dispatcher (it calls the exchange first): who called
+ * it, and the checkpoints. */
 void net_dispatch(void (*lifted)(void)) {
     int was = from_frame_tick;
     from_frame_tick = g_cur_func == FRAME_TICK;   /* an override starts with its caller's */
+    checkpoint(from_frame_tick);
     lifted();
     from_frame_tick = was;
 }
