@@ -121,31 +121,58 @@ void hold_back_memory(void (*lifted)(void)) {
 }
 
 /* ---- custom resolutions (#11) ------------------------------------------ */
+/* The park's screen, 640x480 in the game, at a size of the player's: the
+ * game's 640x480 mode set (0x46ECF0) asks dos32 for its own-size VESA mode
+ * instead, the game's screen size and clip are set to it, and the lifted
+ * code's view sizes (run_lift.py SCREEN_SITES) read tp_w/tp_h/tp_vh. The
+ * panel stays 640 wide at the bottom left. Height: 480 only for now (the
+ * panel's place is fixed by many constants). docs/resolutions.md. */
 extern uint32_t g_esp;
 #define M32W(a) (*(uint32_t*)dos32_mem(a))
-int wide_w = 0, wide_h = 0;    /* 0: the game's 640x480 */
-int32_t tp_w = 640, tp_h = 480, tp_vh = 400;   /* the park view; lifted code reads them */
+volatile int res_w;            /* the size a park opens at (menu, --res, [game] res); 0: 640 */
+#define RES_MAX_W 1920        /* the widest the back buffers are made for */
+int32_t tp_w = 640, tp_h = 480, tp_vh = 400;   /* the screen now; lifted code reads them */
 
-void vesa_set(void (*lifted)(void)) {
-    if (wide_w && (M32W(g_esp + 4) & 0x1FF) == 0x101) M32W(g_esp + 4) = 0x103;
+void vesa_set(void (*lifted)(void)) {   /* 640x480 -> dos32's own-size mode 0x17F */
+    if (tp_w != 640 && (M32W(g_esp + 4) & 0x1FF) == 0x101) M32W(g_esp + 4) = (M32W(g_esp + 4) & ~0x1FFu) | 0x17F;
+    lifted();
+}
+
+/* 320x200 (R, or a screen that switches): the shared code's 640x480 back. */
+void lores_mode(void (*lifted)(void)) {
+    tp_w = 640; tp_h = 480; tp_vh = 400;
     lifted();
 }
 
 void hires_mode(void (*lifted)(void)) {
+    int w = res_w;
+    tp_w = w > 640 ? w : 640; tp_h = 480; tp_vh = 400;   /* before: it sets the mouse range */
+    if (tp_w != 640) dos32_vesa_custom(tp_w, tp_h);
     lifted();
-    if (!wide_w) return;
-    tp_w = wide_w; tp_h = wide_h; tp_vh = wide_h - 80;
-    M32W(0x4CE5B8) = wide_w; M32W(0x4CE5C0) = wide_h;               /* screen width, height */
+    if (tp_w == 640) return;
+    M32W(0x4CE5B8) = tp_w; M32W(0x4CE5C0) = tp_h;                    /* screen width, height */
     M32W(0x4CE5D0) = 0; M32W(0x4CE5E0) = 0;                          /* clip window */
-    M32W(0x4CE5C8) = wide_w; M32W(0x4CE5F0) = wide_h;
-    M32W(0x4CE5EC) = wide_w; M32W(0x4CE5D8) = wide_h;
+    M32W(0x4CE5C8) = tp_w; M32W(0x4CE5F0) = tp_h;
+    M32W(0x4CE5EC) = tp_w; M32W(0x4CE5D8) = tp_h;
+}
+
+/* The size from "WxH": the width rounded down to a multiple of 8 (the game
+ * copies rows in dwords and row pairs), 640..RES_MAX_W; the height must be
+ * 480. 0 for 640x480 or anything else. */
+int res_parse(const char* s) {
+    int w = 0, h = 0;
+    if (!s || sscanf(s, "%dx%d", &w, &h) != 2 || h != 480) return 0;
+    w &= ~7;
+    return w > 640 && w <= RES_MAX_W ? w : 0;
 }
 
 /* The park's two back buffers are one resource, *WB_SCREEN (0x4A10FA), of
  * 0x96000 bytes (size at 0x4A1140): two 640x480 screens. Sized for the chosen
  * resolution when the game loads it. */
 void resource_load(void (*lifted)(void)) {
-    if (wide_w && M32W(g_esp + 4) == 0x4A10FA) M32W(0x4A1140) = 2u * wide_w * (wide_h + 16);   /* + a 16-row strip of slack */
+    /* Made for the widest at the start, so a size picked later in the menu fits;
+     * + a 16-row strip of slack each. */
+    if (M32W(g_esp + 4) == 0x4A10FA) M32W(0x4A1140) = 2u * RES_MAX_W * (480 + 16);
     lifted();
 }
 
@@ -154,17 +181,21 @@ void resource_load(void (*lifted)(void)) {
  * selected, edi at the window, esi after the first four banks) and copy or
  * clear the rest of tp_w x tp_h, switching banks through the game's own call
  * (0x46E6BC). At 640x480 that is the same 0xB000 bytes. */
-extern uint32_t g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp, g_cur_func;
-void sub_0046E6BC(void);
+extern uint32_t g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp;
+void recomp_int(int n);
 
+/* What the game's bank switch (0x46E6BC) does, without its check: past bank
+ * 5 (beyond 640x480) it turns colour 0 red, a warning to its programmers.
+ * The bank, then VESA 4F05 for windows A and B (granularity at 0x4CE5FA). */
 static void guest_bank(uint32_t bank) {
-    uint32_t r[7] = { g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp }, cur = g_cur_func;
-    g_esp -= 4; M32W(g_esp) = bank;
-    g_esp -= 4; M32W(g_esp) = 0xDEAD0000u;   /* RECOMP_RETADDR: its ret pops this */
-    sub_0046E6BC();
-    g_esp += 4;
+    uint32_t r[7] = { g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp };
+    uint32_t gran = M32W(0x4CE5FA) >> 16;
+    *(uint16_t*)dos32_mem(0x4AECDC) = (uint16_t)bank;
+    for (uint32_t win = 0; win < 2; win++) {
+        g_eax = 0x4F05; g_ebx = win; g_ecx = 0; g_edx = gran ? bank * 64 / gran : bank;
+        recomp_int(0x10);
+    }
     g_eax = r[0]; g_ecx = r[1]; g_edx = r[2]; g_ebx = r[3]; g_esi = r[4]; g_edi = r[5]; g_ebp = r[6];
-    g_cur_func = cur;
 }
 
 static void bank_tail(int copy) {
@@ -187,6 +218,22 @@ void tp_clear_tail(void) { bank_tail(0); }
  * marks, and the grid covers 640x480. Wider, take its own whole-screen branch
  * every time (0x4C6BCD set): one copy of the screen, which costs nothing now. */
 void screen_update(void (*lifted)(void)) {
-    if (wide_w) *dos32_mem(0x4C6BCD) = 1;
+    if (tp_w != 640) *dos32_mem(0x4C6BCD) = 1;
     lifted();
+}
+
+/* The park's mouse zones (0x4A93C3, 12 bytes each: x0, y0, x1, y1, ...):
+ * 0x43DFAC sets their heights for the mode; their widths are 640 in both
+ * (320x200 counts in 640x400). The edge strips, the view and the message
+ * bar reach the screen's width; the panel and the buttons at the top right
+ * stay where they are. Set either way, so 640 puts the game's own back. */
+#define ZONE(i, f) (*(int16_t*)dos32_mem(0x4A93C3 + (i) * 12 + (f) * 2))
+void park_zones(void (*lifted)(void)) {
+    lifted();
+    int w = tp_w;
+    ZONE(0, 2) = (int16_t)w;                                   /* top edge */
+    ZONE(1, 0) = (int16_t)(w - 2); ZONE(1, 2) = (int16_t)(w + 2);   /* right edge */
+    ZONE(2, 2) = (int16_t)w;                                   /* bottom edge */
+    ZONE(29, 2) = (int16_t)(w - 2);                            /* the park */
+    ZONE(30, 2) = (int16_t)(w - 4);                            /* the message bar */
 }

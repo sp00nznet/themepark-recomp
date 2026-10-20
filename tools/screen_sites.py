@@ -10,7 +10,8 @@ for f in glob.glob(os.path.join(GEN, 'recomp_0*.c')):
         ins[int(m[1], 16)] = m[2].strip()
 ks = sorted(ins)
 # The dirty grid (0x4C671D, 20 x 30 cells of 32x16): its marker keeps its 640x480 clip.
-KEEP = {0x444D85, 0x444D9B, 0x444DA2, 0x444DD3, 0x444DE9, 0x444DF0}
+KEEP = {0x444D85, 0x444D9B, 0x444DA2, 0x444DD3, 0x444DE9, 0x444DF0,
+        0x46BEE6}   # an x: a panel hotspot's left edge, 480
 idx = {a: i for i, a in enumerate(ks)}
 def at(i): return ins[ks[i]] if 0 <= i < len(ks) else ''
 
@@ -23,15 +24,21 @@ for a in ks:
         continue                                   # stack/struct offsets, masks
     if re.search(r'\b0x280\b', s):
         ui = at(i + 1) == 'push eax' and at(i - 1) == 'push eax' and '0x1e0' not in at(i - 2) + at(i + 2)
-        if not ui:
+        if not ui or a in (0x401483, 0x40A2B4, 0x440691, 0x4406BD, 0x4406EE):   # the mouse range, the top bar
             W.append(a)
     if re.search(r'\b0x1e0\b', s):
-        if not (at(i - 1).startswith('jmp') and '0x190' in at(i - 2)):   # the 320x200 branch's value
-            H.append(a)
-    if re.search(r'\b0x190\b', s):
-        prev = ' '.join(at(j) for j in range(i - 3, i))
-        if ('0x4ce5f6], 1' in prev and at(i - 1).startswith('je')) or a == 0x445FAE:
-            VH.append(a)
+        H.append(a)
+    # 400 is 320x200's height in the game's 640x400 units (0x4CE5F6 bit 1 is
+    # 320x200; 8 is 640x480): only the clear below the panel's top reads it here.
+    if a == 0x445FAE:
+        VH.append(a)
+# 638 and 478: the pointer's clamps and the mouse range's far corner.
+for a in ks:
+    s = ins[a]
+    if re.search(r'[-+] 0x(27e|1de)\]', s):
+        continue
+    if re.search(r'\b0x27e\b', s): MUL[a] = ('0x27Eu', 'tp_w - 2')
+    if re.search(r'\b0x1de\b', s): MUL[a] = ('0x1DEu', 'tp_h - 2')
 # Row multiples: the 16-row unrolled copy, the 30-strip loop, the panel clear.
 for a in ks:
     if 0x445C24 <= a < 0x445D90:
@@ -43,7 +50,6 @@ MUL[0x445FB6] = ('0x3200u', 'tp_w * 20')
 MUL[0x444EF5] = ('0x1Eu', '(tp_h + 15) / 16')         # strips of 16 rows
 MUL[0x471CC2] = ('0xA0u', 'tp_w / 4')                  # rows of dwords: the screen copy
 MUL[0x4715C5] = ('0xA0u', 'tp_w / 4')                  # and the fill
-MUL[0x470E30] = ('0x50u', 'tp_w / 8')                  # copy in row pairs (640x480 only)
 MUL[0x470F23] = ('0xFFFFF884u', '4 - 3 * tp_w')          # the fonts: back to the next character's top
 MUL[0x470FC9] = ('0xFFFFF104u', '4 - 6 * tp_w')
 

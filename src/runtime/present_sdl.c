@@ -35,7 +35,7 @@ static const char* scale_labels[SCALE_COUNT] = { "Sharp", "Smooth", "CRT", "Near
 static char ini_path[MAX_PATH];
 static SDL_Window* wnd;
 static SDL_Renderer* ren;
-static uint32_t frame[1024 * 768], vivid_buf[1024 * 768];
+static uint32_t frame[1920 * 1080], vivid_buf[1920 * 1080];
 static int fw = 320, fh = 200;
 static SDL_Rect dst;             /* where the picture lands in the window */
 static int cw, ch;
@@ -79,9 +79,12 @@ static void layout(void) {
         int k = cw / fw < ch / fh ? cw / fw : ch / fh;
         if (k < 1) k = 1;
         w = fw * k; h = fh * k;
-    } else {                     /* 4:3, as present.c */
+    } else if ((fw == 320 && fh == 200) || (fw == 640 && fh == 400)) {   /* 4:3, as present.c */
         w = cw; h = cw * 3 / 4;
         if (h > ch) { h = ch; w = ch * 4 / 3; }
+    } else {                     /* square pixels */
+        w = cw; h = cw * fh / fw;
+        if (h > ch) { h = ch; w = ch * fw / fh; }
     }
     dst.x = (cw - w) / 2; dst.y = (ch - h) / 2; dst.w = w; dst.h = h;
 }
@@ -212,6 +215,10 @@ static void speed_step(int up) {
     set_speed(speeds[k]);
 }
 
+/* Half the park's width (#11): 320 for 640x480, wider for a park of its own size. */
+extern volatile int res_w;   /* game.c */
+static int step_w(void) { return (res_w > 640 ? res_w : 640) / 2; }
+
 /* Window sizes in 320x240 steps (k), as present.c: the even ones are whole
  * multiples of the park's 640x480. */
 static int max_window_k(void) {
@@ -221,14 +228,14 @@ static int max_window_k(void) {
     SDL_GetWindowBordersSize(wnd, &top, &left, &bottom, &right);
     int k = 8;
     for (; k > 1; k--)
-        if (320 * k + left + right <= wa.w && 240 * k + top + bottom <= wa.h) break;
+        if (step_w() * k + left + right <= wa.w && 240 * k + top + bottom <= wa.h) break;
     return k;
 }
 
 static void size_window(int k) {
     if (g_present.fullscreen) apply_fullscreen(0);
     SDL_RestoreWindow(wnd);
-    SDL_SetWindowSize(wnd, 320 * k, 240 * k);
+    SDL_SetWindowSize(wnd, step_w() * k, 240 * k);
     SDL_SetWindowPosition(wnd, SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(wnd)),
                           SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetWindowDisplayIndex(wnd)));
 }
@@ -275,6 +282,27 @@ static void state_menu(int load) {
     if (c >= 0) state_request = load ? -slots[c] : slots[c];
 }
 
+/* The park's resolution (#11), as present.c's menu: takes effect at the next
+ * park, or R. "Fit the screen" is the desktop's shape at 480 high. */
+static void res_menu(void) {
+    static const int ws[] = { 640, 800, 856, 1120, 0 };
+    static char fit[40];
+    SDL_DisplayMode dm;
+    int fw = 640;
+    if (!SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(wnd), &dm) && dm.h) fw = (480 * dm.w / dm.h) & ~7;
+    fw = fw < 640 ? 640 : fw > 1920 ? 1920 : fw;
+    snprintf(fit, sizeof fit, "Fit the screen (%d x 480)", fw);
+    const char* l[] = { "640 x 480 (original)", "800 x 480", "856 x 480 (16:9)", "1120 x 480 (21:9)", fit, "Cancel" };
+    int c = ask("The park's resolution, from the next park (or R). The panel stays 640 wide.", l, 6);
+    if (c < 0) return;
+    int w = ws[c] ? ws[c] : fw;
+    char v[16];
+    snprintf(v, sizeof v, "%dx480", w);
+    WritePrivateProfileStringA("game", "res", v, ini_path);
+    res_w = w > 640 ? w : 0;
+    if (!g_present.fullscreen && ch >= 480) size_window(ch / 240);
+}
+
 /* F10, or a right-click on the bars. */
 static void settings_menu(void) {
     char text[512], ini_hires[8], sizes[4][32];
@@ -294,7 +322,7 @@ static void settings_menu(void) {
         const char* l[6];
         int n = 0, ks[4];
         for (int k = 2; k <= max_window_k() && n < 4; k += 2) {
-            snprintf(sizes[n], sizeof sizes[0], "%dx  %d x %d", k / 2, 320 * k, 240 * k);
+            snprintf(sizes[n], sizeof sizes[0], "%dx  %d x %d", k / 2, step_w() * k, 240 * k);
             l[n] = sizes[n]; ks[n++] = k;
         }
         l[n] = g_present.fullscreen ? "Windowed" : "Fullscreen";
@@ -325,11 +353,12 @@ static void settings_menu(void) {
         break; }
     case 5: {
         const char* l[] = { g_present.look ? "Natural colour" : "Vivid colour", muted ? "Sound on" : "Mute",
-                            hires ? "Parks in 320x200" : "Parks in 640x480", "Cancel" };
-        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 4);
+                            hires ? "Parks in 320x200" : "Parks in 640x480", "Park resolution", "Cancel" };
+        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 5);
         if (c == 0) g_present.look ^= 1;
         else if (c == 1) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
         else if (c == 2) WritePrivateProfileStringA("game", "hires", hires ? "0" : "1", ini_path);
+        else if (c == 3) res_menu();
         break; }
     default: return;
     }
@@ -443,7 +472,7 @@ void present_run(void) {
         pad_poll(fw, fh, speed_step);
         int w, h, ow, oh;
         SDL_GetRendererOutputSize(ren, &ow, &oh);
-        if (dos32_frame(frame, 1024, 768, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+        if (dos32_frame(frame, 1920, 1080, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
         if (ow != cw || oh != ch) { cw = ow; ch = oh; layout(); }
         set_title();
         draw(ren, g_present.scale, g_present.look);
@@ -464,7 +493,7 @@ void present_close(void) {
  * 1440x1080, SDL's software renderer into DIR/<mode>.bmp, no window. */
 int present_test(const char* dir) {
     int w, h, bad = 0;
-    if (dos32_frame(frame, 1024, 768, &w, &h)) { fw = w; fh = h; }
+    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; }
     cw = 1440; ch = 1080;
     for (int m = 0; m < SCALE_COUNT; m++) {
         char path[MAX_PATH];
