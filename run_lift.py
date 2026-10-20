@@ -21,6 +21,7 @@ import argparse
 import bisect
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -81,14 +82,46 @@ OVERRIDES = {
     0x004700AB: 'music_volume', 0x00477202: 'sos_midi_send',
 }
 
+# INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same
+# overrides, found by matching MAIN.EXE's functions byte for byte (relocated
+# words aside). It has no MIDI tempo call. Its sound bank variant byte and a
+# lifted `ret` are in main.c.
+INTRO_OVERRIDES = {
+    0x00408340: 'hold_back_memory',
+    0x00409CED: 'sos_ok', 0x00409EAA: 'sos_ok', 0x0040A498: 'sos_ok', 0x00409E56: 'sos_ok',
+    0x004074FE: 'sos_ok', 0x0040755A: 'sos_ok', 0x00407CB6: 'sos_ok',
+    0x0040A9C4: 'sos_ok', 0x0040A900: 'sos_ok',
+    0x004068B2: 'sos_ok', 0x00406A4E: 'sos_ok', 0x00406F25: 'sos_ok', 0x00407F60: 'sos_ok',
+    0x00409BE6: 'sos_ok',
+    0x00407584: 'sos_digi_init_driver',
+    0x0040AFDD: 'sos_digi_start', 0x0040AE79: 'sos_digi_done',
+    0x0040B5E6: 'sos_digi_stop', 0x0040A938: 'sos_digi_volume',
+    0x00406A78: 'sos_midi_init_driver', 0x00407036: 'sos_midi_reset',
+    0x00401B4E: 'sos_midi_init_song', 0x004020C4: 'sos_midi_start', 0x0040214C: 'sos_midi_stop',
+    0x00402081: 'sos_midi_uninit_song', 0x0040BFA7: 'sos_midi_done',
+    0x0040256A: 'music_volume', 0x00409BB0: 'sos_midi_send',
+}
+
 
 def apply_override(body, addr, name):
-    fn = OVERRIDES.get(addr)
+    fn = ACTIVE.get(addr)
     if fn and body.startswith('void %s(void) {' % name):
         body = body.replace('void %s(void) {' % name, 'void %s_lifted(void) {' % name, 1)
         body = 'void %s(void (*lifted)(void));\n' % fn + body
         body += '\nvoid %s(void) { %s(%s_lifted); }\n' % (name, fn, name)
     return body
+
+
+def prefix_symbols(out):
+    """The intro links into the same exe as the game: its functions become
+    intro_XXXXXXXX and its tables intro_dispatch_table and so on."""
+    sym = re.compile(r'\bsub_([0-9A-F]{8})\b|\brecomp_(dispatch_table|dispatch_count|entry_va|image\w*)\b')
+    for fn in os.listdir(out):
+        if fn.endswith(('.c', '.h')):
+            p = os.path.join(out, fn)
+            src = open(p, encoding='utf-8').read()
+            open(p, 'w', encoding='utf-8', newline='\n').write(
+                sym.sub(lambda m: 'intro_' + (m.group(1) or m.group(2)), src))
 
 
 def head_disassemble_function(md, code, cs, start, end, heads):
@@ -132,11 +165,20 @@ def write_image(path, img, base, entry, stack):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--exe', default=os.path.join(_HERE, 'game', 'GAME', 'MAIN.EXE'))
-    ap.add_argument('--catalog', default=os.path.join(_HERE, 'analysis', 'd32_funcs.json'))
-    ap.add_argument('--out', default=os.path.join(_HERE, 'src', 'recomp', 'gen'))
+    ap.add_argument('--intro', action='store_true', help='lift INTRO.EXE (the opening film) instead')
+    ap.add_argument('--exe')
+    ap.add_argument('--catalog')
+    ap.add_argument('--out')
     ap.add_argument('--split', type=int, default=400)
     args = ap.parse_args()
+    global ACTIVE
+    if args.intro:
+        ACTIVE, name, cat_name, out = INTRO_OVERRIDES, 'INTRO.EXE', 'intro_funcs.json', 'gen_intro'
+    else:
+        ACTIVE, name, cat_name, out = OVERRIDES, 'MAIN.EXE', 'd32_funcs.json', 'gen'
+    args.exe = args.exe or os.path.join(_HERE, 'game', 'GAME', name)
+    args.catalog = args.catalog or os.path.join(_HERE, 'analysis', cat_name)
+    args.out = args.out or os.path.join(_HERE, 'src', 'recomp', out)
 
     le = LEImage(open(args.exe, 'rb').read())
     img, lo, objs, relocs = le.build(LOAD_BASE)
@@ -153,7 +195,8 @@ def main():
         print('[*] no catalog yet: running disasm32 (a few minutes)')
         work = os.path.join(_HERE, 'work')
         os.makedirs(work, exist_ok=True)
-        pe_path, seed_path = os.path.join(work, 'main_pe.exe'), os.path.join(work, 'seeds.json')
+        stem = os.path.splitext(cat_name)[0]
+        pe_path, seed_path = os.path.join(work, stem + '_pe.exe'), os.path.join(work, stem + '_seeds.json')
         open(pe_path, 'wb').write(to_pe(img, lo, objs, relocs, entry))
         json.dump(['0x%x' % s for s in seeds], open(seed_path, 'w'))
         subprocess.run([sys.executable, os.path.join(_PC, 'disasm', 'disasm32.py'), pe_path,
@@ -236,10 +279,14 @@ def main():
         f.write('const uint32_t recomp_entry_va = 0x%08Xu;\n' % entry)
     write_image(os.path.join(args.out, 'image_data.c'), img, lo, entry, stack)
 
+    if args.intro:
+        prefix_symbols(args.out)
+
     lines = sum(sum(1 for _ in open(os.path.join(args.out, fn), encoding='utf-8', errors='replace'))
                 for fn in os.listdir(args.out) if fn.startswith('recomp_'))
     stats = {'functions': len(entries), 'errors': errors, 'files': idx, 'lines': lines}
-    json.dump(stats, open(os.path.join(_HERE, 'analysis', 'lift_stats.json'), 'w'), indent=1)
+    json.dump(stats, open(os.path.join(_HERE, 'analysis', 'lift_stats_intro.json' if args.intro
+                                       else 'lift_stats.json'), 'w'), indent=1)
     print('=' * 60)
     print('  functions %d   errors %d   files %d   lines %s   %.1fs'
           % (len(entries), errors, idx, format(lines, ','), time.time() - t0))

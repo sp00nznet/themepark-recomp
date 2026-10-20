@@ -8,6 +8,7 @@ setup_theme_park_*
 
 # Lifted output: derived from the game binary, never distributed
 src/recomp/gen/
+src/recomp/gen_intro/
 analysis/*.json
 
 # Builds and scratch

@@ -83,3 +83,31 @@ A function in `run_lift.py` `OVERRIDES` is lifted as `sub_X_lifted`, and
 - **Sound**: 28 HMI SOS entry points and the game's music-volume call become host functions in sound.c that do
   the job themselves and return as the `ret` would, never calling the lifted
   body. See [sound.md](sound.md).
+
+## The opening film
+
+The film is a program of its own, `INTRO.EXE` (179 KB: the same Watcom and
+DOS/4GW, its own copies of Bullfrog's memory manager and HMI SOS), which the
+1994 launcher and GOG's run as `intro -C:/THEME.CD` before `main`. GOG's and
+the CD's copies are the same file (SHA-1 fdb4076e…). It plays `data/intro.dat`
+(16 MB) and the sounds and songs in it.
+
+- `run_lift.py --intro` lifts it to `src/recomp/gen_intro/` (1,057 functions)
+  with its own override table, `INTRO_OVERRIDES`: the same host functions as
+  the game's (memory hold-back, the SOS entry points), at the intro's
+  addresses, found by matching the game's overridden functions byte for byte
+  with relocated words masked. Every symbol gets an `intro_` prefix
+  (`intro_00401554`, `intro_dispatch_table`, `intro_image`), so both lifts
+  link into one exe.
+- main.c's game thread runs `dos32_run` twice: the intro, with the intro's
+  image and dispatch table in the config, then the game. dos32 starts the
+  second run on a fresh machine (pcrecomp#122) while the window stays up.
+  sound.c's two addresses (the sound bank variant byte, a lifted `ret` for the
+  driver's mixer tick) point at the intro's copies while it runs, and its
+  voices and songs are stopped when it ends.
+- The film paces itself on the timer HMI SOS sets to 240 Hz, so it needs no
+  pacing hook: it runs 169 s, its voices each ending before the next begins.
+  Esc and Space skip it (it never reads the mouse).
+- Headless runs leave it out unless `--intro` asks, so scripted input keeps
+  its timing from the start of the game. `--nointro` and `[game] intro=0` leave
+  it out of windowed play.

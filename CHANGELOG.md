@@ -5,6 +5,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The opening film. It is a program of its own, INTRO.EXE, which the 1994
+  installer's and GOG's launchers run before MAIN.EXE; the recomp ran only the
+  game. INTRO.EXE is now lifted too (`run_lift.py --intro`, the setup does
+  it) and linked into the same exe, and it plays in the same window before
+  the title, music and voices included. Esc or Space skips it, as it always
+  did; `--nointro` or `[game] intro=0` leaves it out. Headless runs leave it
+  out unless `--intro` asks (needs pcrecomp#122).
+
 ### Fixed
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when

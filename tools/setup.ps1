@@ -155,12 +155,19 @@ if ((Is-Install 'game') -and -not $Force) {
 }
 
 # ---------------------------------------------------------------- lift
-Step 3 "Lifting MAIN.EXE to C (finding the functions takes a few minutes, once)"
+Step 3 "Lifting MAIN.EXE and INTRO.EXE to C (finding the functions takes a few minutes, once)"
 if ((Test-Path 'src\recomp\gen\recomp_dispatch.c') -and -not $Force) { Say "  Already done (skipping)." }
 else {
   if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\d32_funcs.json' }
   $env:PCRECOMP = $Toolkit
   Run "Lifting" ($pyargs + @('run_lift.py'))
+}
+# The opening film: a second, smaller lift.
+if ((Test-Path 'src\recomp\gen_intro\recomp_dispatch.c') -and -not $Force) { Say "  The intro: already done (skipping)." }
+else {
+  if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\intro_funcs.json' }
+  $env:PCRECOMP = $Toolkit
+  Run "Lifting the intro" ($pyargs + @('run_lift.py', '--intro'))
 }
 
 # ---------------------------------------------------------------- build
