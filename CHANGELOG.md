@@ -6,6 +6,11 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Ride films played nearly three times too fast: they time their frames on
+  the DOS time of day, which moved every hundredth instead of in 1/18.2 s
+  ticks as on DOS (needs pcrecomp#121). The takeover and game-over films
+  were paced at the game's frame rate instead of their own retrace clock, and
+  in 320x200 showed 6 frames a second instead of 17.5 (#10).
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when
   sound was turned off and on: the mixer's play position wrapped at 65536

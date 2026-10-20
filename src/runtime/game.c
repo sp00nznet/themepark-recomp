@@ -55,20 +55,25 @@ static void do_state(int req) {
     state_note_until = GetTickCount() + 4000;
 }
 
-/* Hold the caller until the next frame is due. */
-static void pace_wait(void) {
-    if (game_fps <= 0) return;   /* --fps 0: flat out, as on DOS */
-    if (dos32_virtual_clock) { dos32_advance(1.0 / game_fps); return; }
+/* Hold the caller until `period` seconds after the last frame. */
+static void pace_hold(double period) {
+    if (dos32_virtual_clock) { dos32_advance(period); return; }
     static LARGE_INTEGER f, t;
     if (!f.QuadPart) QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&t);
     double now = (double)t.QuadPart / (double)f.QuadPart;
     if (next_s - now > 1.0 || now - next_s > 0.25) next_s = now;   /* first frame, or a long stall */
     if (next_s > now) dos32_idle(next_s - now);
-    next_s += 1.0 / game_fps;
+    next_s += period;
+}
+
+/* Hold the caller until the next frame is due. */
+static void pace_wait(void) {
+    if (game_fps > 0) pace_hold(1.0 / game_fps);   /* --fps 0: flat out, as on DOS */
 }
 
 static int polled;   /* the input poll ran since the last present */
+extern uint32_t g_cur_func;   /* the lifted function running now */
 
 void pace_frame(void (*lifted)(void)) {
     int req = state_request;
@@ -85,9 +90,19 @@ void pace_frame(void (*lifted)(void)) {
  * negotiations, whose clock counts passes. On a 486 each pass redrew the
  * screen and took a good fraction of a second; native, all 1000 go by in one
  * frame. A frame that did not go through the poll is paced here instead, so
- * every loop runs at the frame rate and none is paced twice. */
+ * every loop runs at the frame rate and none is paced twice.
+ *
+ * Except the takeover and game-over films (0x44C7D1, issue #10): their loop
+ * has a pace of its own, one retrace (70 Hz) a pass and in 320x200 a new
+ * frame every 4th pass, 17.5 frames a second. In 640x480 it shows a new frame
+ * every pass, which a 486 could only manage every few retraces; hold those to
+ * the same 17.5. Paced at the game's frame rate instead, 320x200 played at
+ * 6 frames a second. */
 void pace_present(void (*lifted)(void)) {
-    if (!polled) pace_wait();
+    if (g_cur_func >= 0x0044C7D1u && g_cur_func < 0x0044CA6Bu) {
+        if (!(*dos32_mem(0x4CE5F6) & 1)) pace_hold(4.0 / 70);   /* bit 0: 320x200 */
+    }
+    else if (!polled) pace_wait();
     polled = 0;
     lifted();
 }
@@ -100,7 +115,6 @@ void pace_present(void (*lifted)(void)) {
  * two or three seconds. Its passes are frames, paced like every other.
  * The palette fades wait for retrace too, many times a frame, and keep the
  * plain 70 Hz wait. */
-extern uint32_t g_cur_func;
 void pace_retrace(void (*lifted)(void)) {
     if (g_cur_func >= 0x00434EA5u && g_cur_func < 0x00436F27u) {
         if (!polled) pace_wait();
