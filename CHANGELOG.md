@@ -27,6 +27,12 @@ versions follow [SemVer](https://semver.org/).
   the title, music and voices included. Esc or Space skips it, as it always
   did; `--nointro` or `[game] intro=0` leaves it out. Headless runs leave it
   out unless `--intro` asks (needs pcrecomp#122).
+- Music packs (#12): the game's songs replaced by recordings, such as the
+  PlayStation version's CD tracks. A pack is a folder, `music\NAME\`, of
+  Ogg Vorbis or WAV files named after the songs (RIDE1 ... RIDE17, FANFARE,
+  INTRO...; music/README.md); songs it lacks stay MIDI. Picked in the
+  settings menu (F10, *Music*), with `--music NAME` or `[sound] music=`, and
+  a change is heard at once. The game's music volume applies.
 
 ### Fixed
 - The pointer came apart, from the top down, after a long game (#6). Every

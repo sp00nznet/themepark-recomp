@@ -33,6 +33,8 @@ typedef struct thread_s* HANDLE;
 typedef pthread_mutex_t CRITICAL_SECTION;
 
 #define _stricmp strcasecmp
+#define _strnicmp strncasecmp
+#define FILE_ATTRIBUTE_DIRECTORY 0x10
 #define _popen popen
 #define _pclose pclose
 #define Sleep(ms) usleep((useconds_t)(ms) * 1000u)

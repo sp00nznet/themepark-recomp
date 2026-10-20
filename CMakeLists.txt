@@ -44,6 +44,7 @@ set(HOST
   src/runtime/game.c
   src/runtime/audio.c
   src/runtime/sound.c
+  src/runtime/music.c
   src/runtime/pad.c)
 
 if(WIN32)

@@ -26,3 +26,5 @@ themepark.sh
 # Mods are the player's own; only the instructions are ours
 mods/*
 !mods/README.md
+music/*
+!music/README.md
