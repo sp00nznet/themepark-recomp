@@ -74,6 +74,28 @@ calendar running, no faults, no unresolved dispatches), plus the lift's
 function and error counts. Any line worse than `conformance.json` fails. With
 no `game\` or no build it prints `SKIP` and exits 0. Today: 6/6.
 
+## Multiplayer
+
+```
+py -3 tools/mpcheck.py --players 4      # 2, 3 or 4 headless players on this machine
+py -3 tools/mpcheck.py --rejoin         # player 2 crashes at 65 s and rejoins
+```
+
+Each player is scripted into a park through the menus and its memory dumped.
+The normal run checks that everyone connects, that the shared state is
+byte-identical on every machine after the sync at the gates, that thugs
+(Ctrl+T) reach every other park, and the house rules (a gift and a grant to
+the exact amount, a shared ride). `--rejoin` checks that a new program gets
+the crashed player's place and park back and stays in step. Players run from
+one folder, so they share `states\` (the checkpoint names carry the player).
+
+For your own runs: `--host N`, `--join ADDR`, `--give T:PLAYER:AMOUNT`,
+`--grant T:PLAYER:AMOUNT` and `--share T:PLAYER` (players from 1) work with
+the scripted input above. `TP_NETLOG=1` logs the syncs, checkpoints and
+rollbacks; `TP_NET_CP=N` checkpoints every N frames instead of 750. Headless,
+a player who leaves ends the game for everyone (so a test ends), unless
+`TP_NET_REJOIN=1`, which waits for them as a real game does.
+
 ## On netlab
 
 The recipe is `projects/themepark-recomp.env` in recomp-netlab:
