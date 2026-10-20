@@ -27,6 +27,8 @@ extern const uint8_t recomp_image[];
 extern double game_fps;   /* game.c */
 extern volatile int state_request;   /* game.c: save states */
 extern int sound_mute, sound_headless;   /* sound.c */
+extern int net_host_players, net_port;   /* net.c: multiplayer */
+extern char net_join[256];
 void sound_tick(double dt);
 
 static dos32_config cfg;
@@ -242,10 +244,21 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc) add_event('p', argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc && nwatch < 8) watch[nwatch++] = strtoul(argv[++i], NULL, 16);
         else if (!strcmp(argv[i], "--game") && i + 1 < argc) snprintf(root, sizeof root, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--host") && i + 1 < argc) {
+            net_host_players = atoi(argv[++i]);
+            if (net_host_players < 2 || net_host_players > 4) { fprintf(stderr, "themepark: --host takes 2, 3 or 4 players\n"); return 2; } }
+        else if (!strcmp(argv[i], "--join") && i + 1 < argc) snprintf(net_join, sizeof net_join, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--port") && i + 1 < argc) net_port = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--")) {
             args[0] = 0;
             for (i++; i < argc; i++) { strncat(args, argv[i], sizeof args - strlen(args) - 2); strcat(args, " "); }
         } else { fprintf(stderr, "themepark: unknown option %s\n", argv[i]); return 2; }
+    }
+    /* The game's own switch for a network game; a joining machine is told
+     * the real count by the host (net.c). */
+    if ((net_host_players || net_join[0]) && !strstr(args, "-m")) {
+        size_t l = strlen(args);
+        snprintf(args + l, sizeof args - l, " -m%d", net_host_players ? net_host_players : 2);
     }
     if (!root[0]) {
         /* game/ beside the program, or beside the repo when run from build/ */

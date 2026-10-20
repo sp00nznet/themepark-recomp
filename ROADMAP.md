@@ -10,12 +10,12 @@
   sounds thin.
 - **Quick-save keys and autosave** on top of the save states.
 - **Fixes to the original's own bugs** as they turn up, each documented.
-- **The hidden NetBIOS multiplayer** (#2): `-m N` sets the player count
-  (0x4C7792) and starts a NetBIOS layer of about six functions
-  (0x4387a0-0x439600) that call int 5Ch through DPMI. The count is checked
-  in 21 places in the game. Needs NetBIOS emulated in dos32, or those
-  functions replaced on the host over UDP/TCP. First, find out what it
-  does in play.
+- **The network game, by hand** (#2): it runs over TCP for 2-4 players and
+  stays in sync headless (docs/multiplayer.md). Still to do: play it at
+  windows and over a LAN, a long game, the stock market and the other
+  shared commands, and Windows with Linux. Then a gentler exit when a
+  player leaves (today the game just closes), and a way to host and join
+  from the settings menu.
 - **Linux, played by hand**: the window, captured mouse, dialogs and pad have
   only run headless or briefly; music needs a synth on ALSA, so a bundled
   soundfont would help here most of all.

@@ -5,6 +5,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The network game Bullfrog left in (#2): 2 to 4 players over TCP,
+  `--host N` and `--join ADDR`. The game's own NetBIOS protocol runs
+  unchanged; `net.c` carries its sessions. Each player runs their own park
+  in a shared world, in step frame by frame, and Ctrl+T sends thugs to the
+  others. Headless with 2, 3 and 4 players, every machine's shared state is
+  identical after each sync, and thugs arrive in every other park. How it
+  works: docs/multiplayer.md.
+
 ### Fixed
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when

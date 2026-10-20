@@ -39,6 +39,11 @@ What this adds to the 1994 DOS game, beyond running it natively:
   beneath it is replaced.
 - **Xbox controller.** The left stick moves the pointer, A and B are the
   buttons, the D-pad scrolls and the bumpers set the speed.
+- **The hidden network game, playable.** Bullfrog left a complete 2-4 player
+  game in, reachable only with `-m N` and 1994 NetBIOS. It now runs over TCP:
+  `--host N` on one machine, `--join ADDR` on the others. Each player runs
+  their own park against the others in a shared world, and Ctrl+T sends
+  thugs into their parks ([docs/multiplayer.md](docs/multiplayer.md)).
 - **Mods.** `--mod NAME` lays `mods\NAME` over the game's files without
   touching them.
 - **Native on Linux.** The same lifted C built with gcc and SDL2: every
@@ -190,6 +195,8 @@ themepark.exe --scale crt           scaling: integer (default), sharp, smooth, c
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
 themepark.exe --mute                no sound
 themepark.exe --mod NAME            play with mods\NAME laid over the game's files (mods/README.md)
+themepark.exe --host 2              network game, 2 to 4 players: this machine hosts (TCP 7790, --port P)
+themepark.exe --join 192.168.1.20   ...and the others join it (docs/multiplayer.md); Ctrl+T sends thugs
 themepark.exe --lang 1              language: 0 English (default), 1 German, 2 Italian, 3 Spanish, 4 French
 themepark.exe --headless --seconds 60 --record out.mp4
                                     no window: run 60 guest seconds and film it (needs ffmpeg)
