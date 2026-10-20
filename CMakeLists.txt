@@ -45,6 +45,8 @@ set(HOST
   src/runtime/audio.c
   src/runtime/sound.c
   src/runtime/music.c
+  src/runtime/net.c
+  src/runtime/net_rules.c
   src/runtime/pad.c)
 
 if(WIN32)
@@ -56,7 +58,7 @@ if(WIN32)
   # The lifted C: no warnings (there are hundreds of thousands of harmless ones),
   # and wrap-around arithmetic, as the CPU does it.
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
-  target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid)
+  target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid ws2_32)
 else()
   # Linux: gcc (or clang) and SDL2 for the window, sound and pad; ALSA's
   # sequencer, if its headers are there, for the music (sound.c).

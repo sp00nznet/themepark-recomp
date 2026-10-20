@@ -86,6 +86,10 @@ OVERRIDES = {
     0x0046F68F: 'sos_midi_init_song', 0x0046FC05: 'sos_midi_start', 0x0046FC8D: 'sos_midi_stop',
     0x0046FBC2: 'sos_midi_uninit_song', 0x00472174: 'sos_midi_done', 0x00479E5C: 'sos_midi_tempo',
     0x004700AB: 'music_volume', 0x00477202: 'sos_midi_send',
+    # The NetBIOS multiplayer, carried over TCP (net.c, docs/multiplayer.md).
+    0x004393BE: 'net_start', 0x00438A01: 'net_present', 0x00439414: 'net_connect',
+    0x00438F65: 'net_send', 0x004390DF: 'net_receive', 0x00439B20: 'net_hangup',
+    0x004399F2: 'net_exchange', 0x0041CCF8: 'net_dispatch',
 }
 
 # INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same

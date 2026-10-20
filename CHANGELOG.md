@@ -33,6 +33,22 @@ versions follow [SemVer](https://semver.org/).
   INTRO...; music/README.md); songs it lacks stay MIDI. Picked in the
   settings menu (F10, *Music*), with `--music NAME` or `[sound] music=`, and
   a change is heard at once. The game's music volume applies.
+- The network game Bullfrog left in (#2): 2 to 4 players over TCP,
+  `--host N` and `--join ADDR`. The game's own NetBIOS protocol runs
+  unchanged; `net.c` carries its sessions. Each player runs their own park
+  in a shared world, in step frame by frame, and Ctrl+T sends thugs to the
+  others. Headless with 2, 3 and 4 players, every machine's shared state is
+  identical after each sync, and thugs arrive in every other park. How it
+  works: docs/multiplayer.md.
+- Dropping out and back in: every machine checkpoints every 30 s; when one
+  crashes or loses its link the others wait, and when it is back (`--join`
+  again, or `--host N --resume` for the host) everyone goes back to the
+  newest checkpoint they all have.
+- House rules, from F10's *Network game*: give money to another player,
+  share your research with them, and as the host grant or fine.
+- *Network game* in the settings menu: host, join (asks for the address)
+  and resume, without the command line. Loading a save state is off in a
+  network game.
 
 ### Fixed
 - The pointer came apart, from the top down, after a long game (#6). Every

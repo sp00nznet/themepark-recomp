@@ -23,6 +23,8 @@ build\themepark.exe                    build-linux/themepark
    src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back, save states
    src/runtime/sound.c              HMI SOS replaced: effects and music (docs/sound.md)
    src/runtime/audio.c              the effects mixer on waveOut (SDL audio on Linux)
+   src/runtime/net.c                the network game over TCP: links, checkpoints, rejoining (docs/multiplayer.md)
+   src/runtime/net_rules.c          its house rules: money between players, shared research
    src/runtime/compat.h, compat.c   Linux: the Win32 names the shared files use (threads, ini)
 ```
 
@@ -41,6 +43,10 @@ pcrecomp `docs/DOS32.md` says why).
   options, and the scripts that drive the game in tests.
 
 ## Threads
+
+(In a network game net.c adds a thread per link that files what arrives, and
+on the host one that accepts players who rejoin; the game thread only ever
+reads what they filed.)
 
 - The **game thread** runs the lifted code from the Watcom entry point, on a
   256 MB stack (every guest call is a host call, and the game recurses). dos32
@@ -80,6 +86,11 @@ A function in `run_lift.py` `OVERRIDES` is lifted as `sub_X_lifted`, and
   [pacing.md](pacing.md).
 - **Memory**: `0x00472950`, Bullfrog's grab-everything memory manager, runs
   inside `hold_back_memory` (game.c), which keeps 1 MB away from it.
+- **Network**: the game's NetBIOS layer (start, connect, send, receive, hang
+  up), the per-frame exchange and the command dispatcher become host
+  functions in net.c. The game's own protocol runs unchanged over TCP; the
+  exchange is also where checkpoints, rollbacks and house rules happen. See
+  [multiplayer.md](multiplayer.md).
 - **Sound**: 28 HMI SOS entry points and the game's music-volume call become host functions in sound.c that do
   the job themselves and return as the `ret` would, never calling the lifted
   body. See [sound.md](sound.md).

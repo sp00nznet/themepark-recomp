@@ -28,6 +28,7 @@
 #include "present.h"
 #include "pad.h"
 #include "music.h"
+#include "net.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
@@ -267,6 +268,141 @@ static int slot_label(int slot, char* out, size_t n) {
     return 1;
 }
 
+/* ---- the network game, from the menu -------------------------------------- */
+
+/* A one-line question with OK and Cancel. 1 with the answer in buf, else 0. */
+static int ask_done;
+static LRESULT CALLBACK ask_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
+    if (m == WM_COMMAND && (LOWORD(wp) == IDOK || LOWORD(wp) == IDCANCEL)) {
+        ask_done = LOWORD(wp) == IDOK ? 1 : -1;
+        return 0;
+    }
+    if (m == WM_CLOSE) { ask_done = -1; return 0; }
+    return DefWindowProcA(h, m, wp, lp);
+}
+
+static int ask_text(const char* title, const char* prompt, char* buf, int n) {
+    static int registered;
+    HINSTANCE hi = GetModuleHandleA(NULL);
+    if (!registered) {
+        WNDCLASSA c = { 0 };
+        c.lpfnWndProc = ask_proc; c.hInstance = hi; c.lpszClassName = "TPAsk";
+        c.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); c.hCursor = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&c);
+        registered = 1;
+    }
+    RECT r = { 0, 0, 380, 110 }, p;
+    AdjustWindowRect(&r, WS_CAPTION | WS_SYSMENU, FALSE);
+    GetWindowRect(wnd, &p);
+    int w = r.right - r.left, hgt = r.bottom - r.top;
+    HWND d = CreateWindowExA(WS_EX_DLGMODALFRAME, "TPAsk", title, WS_CAPTION | WS_SYSMENU | WS_POPUP,
+                             (p.left + p.right - w) / 2, (p.top + p.bottom - hgt) / 2, w, hgt, wnd, NULL, hi, NULL);
+    HFONT f = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HWND kids[4] = {
+        CreateWindowA("STATIC", prompt, WS_CHILD | WS_VISIBLE, 12, 10, 356, 20, d, NULL, hi, NULL),
+        CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", buf, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                        12, 34, 356, 24, d, (HMENU)100, hi, NULL),
+        CreateWindowA("BUTTON", "OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 196, 72, 80, 26, d, (HMENU)IDOK, hi, NULL),
+        CreateWindowA("BUTTON", "Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 288, 72, 80, 26, d, (HMENU)IDCANCEL, hi, NULL) };
+    for (int i = 0; i < 4; i++) SendMessageA(kids[i], WM_SETFONT, (WPARAM)f, TRUE);
+    SendMessageA(kids[1], EM_SETSEL, 0, -1);
+    ShowWindow(d, SW_SHOW);
+    SetFocus(kids[1]);
+    EnableWindow(wnd, FALSE);
+    ask_done = 0;
+    MSG msg;
+    while (!ask_done && GetMessageA(&msg, NULL, 0, 0) > 0)
+        if (!IsDialogMessageA(d, &msg)) { TranslateMessage(&msg); DispatchMessageA(&msg); }
+    if (ask_done > 0) GetWindowTextA(kids[1], buf, n);
+    EnableWindow(wnd, TRUE);
+    DestroyWindow(d);
+    SetForegroundWindow(wnd);
+    return ask_done > 0;
+}
+
+/* Start again with these options: a network game is set up at start-up. */
+static void relaunch(const char* args) {
+    if (MessageBoxA(wnd, "This starts Theme Park again for the network game.\n"
+                    "The park you are playing now is not kept (save a state first if you want it).",
+                    "Network game", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK) return;
+    char exe[MAX_PATH], cmd[MAX_PATH + 320];
+    GetModuleFileNameA(NULL, exe, sizeof exe);
+    snprintf(cmd, sizeof cmd, "\"%s\" %s", exe, args);
+    STARTUPINFOA si = { sizeof si };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        MessageBoxA(wnd, "Could not start Theme Park again.", "Network game", MB_OK | MB_ICONERROR);
+        return;
+    }
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    ExitProcess(0);
+}
+
+enum { ID_NET = 700, ID_NET_JOIN = 710, ID_NET_RESUME, ID_NET_P = 720 };   /* ID_NET + players: host */
+static const int give_amounts[4] = { 1000, 5000, 10000, 50000 }, grant_amounts[3] = { 1000, 10000, 50000 };
+
+/* The "Network game" submenu: start one, or, in one, the house rules. */
+static HMENU network_menu(void) {
+    HMENU nm = CreatePopupMenu();
+    char t[96];
+    if (!net_n) {
+        for (int k = 2; k <= 4; k++) {
+            snprintf(t, sizeof t, "Host a game for %d players", k);
+            AppendMenuA(nm, MF_STRING, ID_NET + k, t);
+        }
+        AppendMenuA(nm, MF_STRING, ID_NET_JOIN, "Join a game...");
+        int last = net_last_hosted();
+        snprintf(t, sizeof t, "Resume the %d-player game I hosted", last);
+        AppendMenuA(nm, MF_STRING | (last ? 0 : MF_GRAYED), ID_NET_RESUME, last ? t : "Resume the game I hosted");
+        return nm;
+    }
+    snprintf(t, sizeof t, "You are player %d of %d", net_me + 1, net_n);
+    AppendMenuA(nm, MF_STRING | MF_GRAYED, 0, t);
+    for (int j = 0; j < net_n; j++) {
+        if (j == net_me) continue;
+        HMENU pm = CreatePopupMenu();
+        for (int k = 0; k < 4; k++) {
+            snprintf(t, sizeof t, "Give %d", give_amounts[k]);
+            AppendMenuA(pm, MF_STRING, ID_NET_P + j * 20 + k, t);
+        }
+        AppendMenuA(pm, MF_STRING | (net_sharing[j] ? MF_CHECKED : 0), ID_NET_P + j * 20 + 4, "Share my research with them");
+        if (net_me == 0) {
+            AppendMenuA(pm, MF_SEPARATOR, 0, NULL);
+            for (int k = 0; k < 3; k++) {
+                snprintf(t, sizeof t, "Grant %d (host)", grant_amounts[k]);
+                AppendMenuA(pm, MF_STRING, ID_NET_P + j * 20 + 5 + k, t);
+            }
+            for (int k = 0; k < 3; k++) {
+                snprintf(t, sizeof t, "Fine %d (host)", grant_amounts[k]);
+                AppendMenuA(pm, MF_STRING, ID_NET_P + j * 20 + 8 + k, t);
+            }
+        }
+        snprintf(t, sizeof t, "Player %d%s", j + 1, net_player_up(j) ? "" : " (away)");
+        AppendMenuA(nm, MF_POPUP, (UINT_PTR)pm, t);
+    }
+    return nm;
+}
+
+static void network_command(int cmd) {
+    char args[320], addr[256];
+    if (cmd > ID_NET && cmd <= ID_NET + 4) { snprintf(args, sizeof args, "--host %d", cmd - ID_NET); relaunch(args); }
+    else if (cmd == ID_NET_JOIN) {
+        GetPrivateProfileStringA("net", "join", "127.0.0.1", addr, sizeof addr, ini_path);
+        if (!ask_text("Join a network game", "The host's address (name or IP, and :port if not 7790):", addr, sizeof addr) || !addr[0]) return;
+        WritePrivateProfileStringA("net", "join", addr, ini_path);
+        snprintf(args, sizeof args, "--join %s", addr);
+        relaunch(args);
+    }
+    else if (cmd == ID_NET_RESUME) { snprintf(args, sizeof args, "--host %d --resume", net_last_hosted()); relaunch(args); }
+    else if (cmd >= ID_NET_P && cmd < ID_NET_P + 80) {
+        int j = (cmd - ID_NET_P) / 20, k = (cmd - ID_NET_P) % 20;
+        if (k < 4) net_rules_give(j, give_amounts[k]);
+        else if (k == 4) net_rules_share(j, !net_sharing[j]);
+        else if (k < 8) net_rules_grant(j, grant_amounts[k - 5]);
+        else if (k < 11) net_rules_grant(j, -grant_amounts[k - 8]);
+    }
+}
+
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
@@ -303,7 +439,7 @@ static void settings_menu(int sx, int sy) {
         char t[64];
         int used = slot_label(slot, t, sizeof t);
         AppendMenuA(sv, MF_STRING, ID_SAVE + slot, t);
-        AppendMenuA(ld, MF_STRING | (used ? 0 : MF_GRAYED), ID_LOAD + slot, t);
+        AppendMenuA(ld, MF_STRING | (used && !net_n ? 0 : MF_GRAYED), ID_LOAD + slot, t);   /* not in a network game: it would leave the others */
     }
     for (int i = 0; i < SCALE_COUNT; i++)
         AppendMenuA(sc, MF_STRING | (g_present.scale == i ? MF_CHECKED : 0), ID_SCALE + i, scale_labels[i]);
@@ -316,6 +452,7 @@ static void settings_menu(int sx, int sy) {
     GetPrivateProfileStringA("game", "hires", "1", ini_hires, sizeof ini_hires, ini_path);
     AppendMenuA(m, MF_POPUP, (UINT_PTR)sv, "Save state");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)ld, "Load state");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)network_menu(), "Network game");
     AppendMenuA(m, MF_SEPARATOR, 0, NULL);
     AppendMenuA(m, MF_POPUP, (UINT_PTR)sz, "Window size");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)sc, "Scaling\tF12");
@@ -329,6 +466,7 @@ static void settings_menu(int sx, int sy) {
     AppendMenuA(m, MF_POPUP, (UINT_PTR)rs, "Park resolution");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
     DestroyMenu(m);
+    if (cmd >= ID_NET && cmd < ID_NET_P + 80) { network_command(cmd); return; }
     if (cmd > ID_SAVE && cmd <= ID_SAVE + 9) { state_request = cmd - ID_SAVE; return; }
     if (cmd > ID_LOAD && cmd <= ID_LOAD + 9) { state_request = -(cmd - ID_LOAD); return; }
     if (cmd >= ID_SIZE && cmd < ID_SAVE) {

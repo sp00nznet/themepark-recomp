@@ -37,6 +37,10 @@ int res_parse(const char* s);
 extern volatile int state_request;   /* game.c: save states */
 extern int sound_mute, sound_headless;   /* sound.c */
 extern uint32_t sound_variant_va, sound_noop_fn;
+extern int net_host_players, net_port, net_resume;   /* net.c: multiplayer */
+extern char net_join[256];
+extern int net_wait_on_drop;
+void net_rules_give(int to, int amount), net_rules_grant(int to, int amount), net_rules_share(int to, int on);
 void sound_tick(double dt);
 void sound_reset(void);
 
@@ -71,6 +75,8 @@ static void add_event(int kind, const char* spec) {
     if (kind == 'k' && sscanf(spec, "%lf:%x", &t, &a) != 2) return;
     if ((kind == 'f' || kind == 's' || kind == 'l') && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
     if (kind == 'p' && sscanf(spec, "%lf:%x=%x", &t, &a, &b) != 3) return;
+    if ((kind == 'G' || kind == 'H') && sscanf(spec, "%lf:%d:%d", &t, &a, &b) != 3) return;
+    if (kind == 'R' && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
     if (kind == 'd') { if (sscanf(spec, "%lf:", &t) != 1 || ndump >= 8) return;
                        snprintf(dump_path[ndump], MAX_PATH, "%s", strchr(spec, ':') + 1); a = ndump++; }
     evs[nev].frame = (long)(t * 70); evs[nev].kind = kind; evs[nev].a = a; evs[nev].b = b; nev++;
@@ -92,6 +98,12 @@ static void run_events(void) {
             }
         } else if (evs[i].kind == 'p') {          /* --poke: a guest byte */
             if (f == frame_no) *dos32_mem((uint32_t)evs[i].a) = (uint8_t)evs[i].b;
+        } else if (evs[i].kind == 'G' || evs[i].kind == 'H' || evs[i].kind == 'R') {   /* house rules, players from 1 */
+            if (f == frame_no) {
+                if (evs[i].kind == 'G') net_rules_give(evs[i].a - 1, evs[i].b);
+                else if (evs[i].kind == 'H') net_rules_grant(evs[i].a - 1, evs[i].b);
+                else net_rules_share(evs[i].a - 1, 1);
+            }
         } else if (evs[i].kind == 'f') {
             if (f == frame_no) game_fps = evs[i].a;
         } else if (evs[i].kind == 's' || evs[i].kind == 'l') {   /* --save / --load T:slot */
@@ -292,10 +304,26 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc) add_event('p', argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc && nwatch < 8) watch[nwatch++] = strtoul(argv[++i], NULL, 16);
         else if (!strcmp(argv[i], "--game") && i + 1 < argc) snprintf(root, sizeof root, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--host") && i + 1 < argc) {
+            net_host_players = atoi(argv[++i]);
+            if (net_host_players < 2 || net_host_players > 4) { fprintf(stderr, "themepark: --host takes 2, 3 or 4 players\n"); return 2; } }
+        else if (!strcmp(argv[i], "--join") && i + 1 < argc) snprintf(net_join, sizeof net_join, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--port") && i + 1 < argc) net_port = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--resume")) net_resume = 1;
+        else if (!strcmp(argv[i], "--give") && i + 1 < argc) add_event('G', argv[++i]);    /* T:PLAYER:AMOUNT */
+        else if (!strcmp(argv[i], "--grant") && i + 1 < argc) add_event('H', argv[++i]);   /* T:PLAYER:AMOUNT, the host */
+        else if (!strcmp(argv[i], "--share") && i + 1 < argc) add_event('R', argv[++i]);   /* T:PLAYER */
         else if (!strcmp(argv[i], "--")) {
             args[0] = 0;
             for (i++; i < argc; i++) { strncat(args, argv[i], sizeof args - strlen(args) - 2); strcat(args, " "); }
         } else { fprintf(stderr, "themepark: unknown option %s\n", argv[i]); return 2; }
+    }
+    if (headless && !getenv("TP_NET_REJOIN")) net_wait_on_drop = 0;   /* a test ends when a player does */
+    /* The game's own switch for a network game; a joining machine is told
+     * the real count by the host (net.c). */
+    if ((net_host_players || net_join[0]) && !strstr(args, "-m")) {
+        size_t l = strlen(args);
+        snprintf(args + l, sizeof args - l, " -m%d", net_host_players ? net_host_players : 2);
     }
     if (!root[0]) {
         /* game/ beside the program, or beside the repo when run from build/ */
