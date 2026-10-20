@@ -22,6 +22,17 @@ if(NOT GEN)
   message(FATAL_ERROR "src/recomp/gen is empty: run `py -3 run_lift.py` first")
 endif()
 
+# The opening film (INTRO.EXE, `run_lift.py --intro`): linked in beside the
+# game when it has been lifted and pcrecomp can run two programs (pcrecomp#122).
+file(GLOB GEN_INTRO ${CMAKE_SOURCE_DIR}/src/recomp/gen_intro/recomp_*.c)
+file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_RERUN REGEX "dispatch_count")
+if(GEN_INTRO AND HAS_RERUN)
+  list(APPEND GEN ${GEN_INTRO} ${CMAKE_SOURCE_DIR}/src/recomp/gen_intro/image_data.c)
+  set(INTRO ON)
+elseif(GEN_INTRO)
+  message(WARNING "pcrecomp at ${PCRECOMP} cannot run the intro before the game (pcrecomp#122): building without it")
+endif()
+
 set(HOST
   ${PCRECOMP}/runtime/dos32/dos32.c
   src/runtime/main.c
@@ -64,6 +75,9 @@ endif()
 target_include_directories(themepark PRIVATE
   ${PCRECOMP}/runtime/recomp32 ${PCRECOMP}/runtime/dos32 src/recomp/gen src/runtime)
 target_compile_definitions(themepark PRIVATE RECOMP_YIELD_EVERY=256u)
+if(INTRO)
+  target_compile_definitions(themepark PRIVATE HAVE_INTRO)
+endif()
 
 # A debugging build (-DTP_TRACE=ON, in a build dir of its own): every lifted
 # function counts its entries, and TP_TRACE=T0,T1 prints which ran between

@@ -59,6 +59,7 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 
 | Area | State |
 |---|---|
+| Opening film | INTRO.EXE lifted too, played before the title with its music and voices (Esc or Space skips it) |
 | Boot, title, attract demo | works |
 | Name prompt, main menu, setup screens, world map | works |
 | Park simulation (calendar, visitors, money) | runs; long play untested |
@@ -196,6 +197,7 @@ themepark.exe                       play in a window: F10 for the settings menu 
                                     size, scaling, speed...); F12 scaling, F9 vivid colour,
                                     F11 / Alt+Enter fullscreen
 themepark.exe --fps 35              the game's speed: frames per second (default 25; Ctrl+PgUp/PgDn in game)
+themepark.exe --nointro             straight to the title, no opening film ([game] intro=0 to keep it so)
 themepark.exe --lowres              parks in 320x200, as the original started (R toggles either way)
 themepark.exe --scale crt           scaling: integer (default), sharp, smooth, crt, nearest
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
@@ -224,7 +226,7 @@ the buttons, D-pad or right stick to scroll, LB / RB speed, Y the 640x480
 switch, X Space, Start Esc, Back F1 (not yet tried on a real pad).
 
 Display choices are remembered in `themepark.ini` beside the exe (`[display]
-scale`, `vivid`, `fullscreen`, `vsync`, `window`; `[game] fps`, `hires`).
+scale`, `vivid`, `fullscreen`, `vsync`, `window`; `[game] fps`, `hires`, `intro`).
 
 Headless runs keep their own clock, so the same script gives the same run every
 time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,

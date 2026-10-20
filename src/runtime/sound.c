@@ -40,8 +40,9 @@
 /* An overridden SOS function returns as its `ret` would: eax, pop the return. */
 static void ret(uint32_t v) { g_eax = v; g_esp += 4; }
 
-#define VARIANT     0x4AA727    /* sound bank variant: 0 11 kHz, 1 22 kHz, 2 44 kHz 16-bit */
-#define NOOP_FN     0x0046E2A0u /* a lifted `ret`: where the driver's mixer tick points */
+/* MAIN.EXE's; the intro has its own copies (main.c sets them while it runs). */
+uint32_t sound_variant_va = 0x4AA727;   /* sound bank variant: 0 11 kHz, 1 22 kHz, 2 44 kHz 16-bit */
+uint32_t sound_noop_fn = 0x0046E2A0u;   /* a lifted `ret`: where the driver's mixer tick points */
 
 int sound_mute;                 /* --mute */
 extern long frame_no;           /* main.c: for TP_SNDLOG */
@@ -59,7 +60,7 @@ void sos_digi_init_driver(void (*lifted)(void)) {
     (void)lifted;
     uint32_t init = ARG(3), handle = ARG(5);
     M32(handle) = 0;
-    M32(init + 0x1C) = NOOP_FN;
+    M32(init + 0x1C) = sound_noop_fn;
     M16(init + 0x20) = 0x170;
     ret(0);
 }
@@ -76,7 +77,7 @@ void sos_digi_start(void (*lifted)(void)) {
     uint32_t s = ARG(1);
     uint32_t data = M32(s), len = M32(s + 8);
     int loops = M16(s + 0xC), vol = M16(s + 0x10), id = M16(s + 0x12) & 255, flags = M16(s + 0x1C);
-    int variant = M8(VARIANT);
+    int variant = M8(sound_variant_va);
     int rate = variant == 2 ? 44100 : variant == 1 ? 22050 : 11025;
     int loop = !(flags & 0x4000) ? 0 : loops == 0xFFFF ? -1 : loops > 0 ? loops - 1 : 0;
     if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d ret %08X\n", frame_no / 70.0, id, data, len, loops, flags, vol, M32(g_esp));

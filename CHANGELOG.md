@@ -12,6 +12,13 @@ versions follow [SemVer](https://semver.org/).
   `THEME.CD\` the way the CD's installer did (its 32 files, `SAVE\` and a
   `SNDSETUP.INF`). A MAIN.EXE the lift does not know now stops it with its
   SHA-1, instead of building something whose addresses are wrong.
+- The opening film. It is a program of its own, INTRO.EXE, which the 1994
+  installer's and GOG's launchers run before MAIN.EXE; the recomp ran only the
+  game. INTRO.EXE is now lifted too (`run_lift.py --intro`, the setup does
+  it) and linked into the same exe, and it plays in the same window before
+  the title, music and voices included. Esc or Space skips it, as it always
+  did; `--nointro` or `[game] intro=0` leaves it out. Headless runs leave it
+  out unless `--intro` asks (needs pcrecomp#122).
 
 ### Fixed
 - The pointer came apart, from the top down, after a long game (#6). Every

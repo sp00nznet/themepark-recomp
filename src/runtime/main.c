@@ -4,7 +4,7 @@
  *
  *   themepark.exe [--headless] [--record out.mp4] [--seconds N] [--log]
  *                 [--click T:x,y] [--key T:sc] [--save T:slot] [--load T:slot]
- *                 [--game DIR] [--fps N]
+ *                 [--game DIR] [--fps N] [--intro | --nointro]
  *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
  *                 [-- game args]
  *
@@ -24,10 +24,18 @@
 
 extern const uint32_t recomp_image_base, recomp_image_size, recomp_image_stack, recomp_entry_va;
 extern const uint8_t recomp_image[];
+#ifdef HAVE_INTRO   /* INTRO.EXE, lifted beside the game (run_lift.py --intro) */
+#include "recomp_types.h"
+extern const uint32_t intro_image_base, intro_image_size, intro_image_stack, intro_entry_va, intro_dispatch_count;
+extern const uint8_t intro_image[];
+extern const recomp_dispatch_entry_t intro_dispatch_table[];
+#endif
 extern double game_fps;   /* game.c */
 extern volatile int state_request;   /* game.c: save states */
 extern int sound_mute, sound_headless;   /* sound.c */
+extern uint32_t sound_variant_va, sound_noop_fn;
 void sound_tick(double dt);
+void sound_reset(void);
 
 static dos32_config cfg;
 static char root[MAX_PATH];
@@ -39,6 +47,8 @@ static const char* present_dir;   /* --present-test */
 static int start_hires = 1;       /* --lowres, [game] hires=0: the original's default */
 static char mod_name[MAX_PATH];   /* --mod, [game] mod= */
 static char overlay[MAX_PATH];
+static int play_intro = -1;       /* --intro / --nointro, [game] intro=; -1: windowed runs only */
+static long game_frame0;          /* frame_no when MAIN.EXE started (after the intro) */
 
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
  * of guest time, game pixels, a set-1 scancode in hex). Each fires once at
@@ -105,7 +115,7 @@ static void on_retrace(void) {
     /* The park in the game's own 640x480 mode: the flag its resolution toggle
      * (R) keeps, set before the first park, so the game switches itself the
      * first time a park opens. Menus stay 320x200, as the game draws them. */
-    if (frame_no == 1 && start_hires) *dos32_mem(0x4A1510) = 1;
+    if (frame_no == game_frame0 + 1 && start_hires && game_frame0 >= 0) *dos32_mem(0x4A1510) = 1;
     run_events();
 #ifdef RECOMP_TRACE
     {   /* the trace build: TP_TRACE=T0,T1 */
@@ -184,6 +194,31 @@ static void start_record(void) {
 
 static DWORD WINAPI game_thread(LPVOID p) {
     (void)p;
+#ifdef HAVE_INTRO
+    /* The opening film, as GOG's THEME.BAT runs it before the game: INTRO.EXE
+     * on the same machine, then MAIN.EXE on a fresh one. Esc or Space skips
+     * it (the film's own test; it never reads the mouse). */
+    if (play_intro) {
+        dos32_config ic = cfg;
+        ic.progname = "C:\\GAME\\INTRO.EXE";
+        ic.args = "-C:/THEME.CD";
+        ic.image = intro_image;
+        ic.image_base = intro_image_base;
+        ic.image_size = intro_image_size;
+        ic.entry = intro_entry_va;
+        ic.stack = intro_image_stack;
+        ic.dispatch = intro_dispatch_table;
+        ic.dispatch_count = intro_dispatch_count;
+        uint32_t variant = sound_variant_va, noop = sound_noop_fn;
+        sound_variant_va = 0x430AAC; sound_noop_fn = 0x004008C4u;   /* the intro's */
+        game_frame0 = -1;
+        dos32_run(&ic);
+        sound_reset();   /* skipped mid-song: nothing of the film plays on */
+        sound_variant_va = variant; sound_noop_fn = noop;
+        if (dos32_quit) { if (!headless) present_close(); return 0; }
+        game_frame0 = frame_no;
+    }
+#endif
     exit_code = dos32_run(&cfg);
     if (!headless) present_close();
     return 0;
@@ -208,6 +243,7 @@ int main(int argc, char** argv) {
         GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
         if (v[0]) game_fps = atof(v);
         start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
+        play_intro = GetPrivateProfileIntA("game", "intro", -1, ini);
         GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
     }
     for (int i = 1; i < argc; i++) {
@@ -225,6 +261,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
         else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
         else if (!strcmp(argv[i], "--lowres")) start_hires = 0;
+        else if (!strcmp(argv[i], "--intro")) play_intro = 1;
+        else if (!strcmp(argv[i], "--nointro")) play_intro = 0;
         else if (!strcmp(argv[i], "--mod") && i + 1 < argc) snprintf(mod_name, sizeof mod_name, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--hires")) start_hires = 1;
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) { wav = open_wav(argv[++i]); }
@@ -281,6 +319,8 @@ int main(int argc, char** argv) {
     cfg.stack = recomp_image_stack;
     cfg.log = log_on;
 
+    /* Scripted runs time their input from the start of the game: no film first. */
+    if (play_intro < 0) play_intro = !headless;
     /* Headless runs make no sound on a machine someone uses: no audio device
      * and no MIDI; the effects are mixed on the frame clock for --record. */
     sound_headless = headless;
