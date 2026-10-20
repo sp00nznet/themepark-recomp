@@ -13,6 +13,15 @@ versions follow [SemVer](https://semver.org/).
   others. Headless with 2, 3 and 4 players, every machine's shared state is
   identical after each sync, and thugs arrive in every other park. How it
   works: docs/multiplayer.md.
+- Dropping out and back in: every machine checkpoints every 30 s; when one
+  crashes or loses its link the others wait, and when it is back (`--join`
+  again, or `--host N --resume` for the host) everyone goes back to the
+  newest checkpoint they all have.
+- House rules, from F10's *Network game*: give money to another player,
+  share your research with them, and as the host grant or fine.
+- *Network game* in the settings menu: host, join (asks for the address)
+  and resume, without the command line. Loading a save state is off in a
+  network game.
 
 ### Fixed
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the

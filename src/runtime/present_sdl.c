@@ -26,6 +26,8 @@
 #include "compat.h"
 #include "dos32.h"
 #include "present.h"
+#include "net.h"
+#include <unistd.h>
 #include "pad.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
@@ -275,6 +277,63 @@ static void state_menu(int load) {
     if (c >= 0) state_request = load ? -slots[c] : slots[c];
 }
 
+/* ---- the network game, from the menu ---------------------------------------- */
+
+/* Start again with these options: a network game is set up at start-up. */
+static void relaunch(const char* a1, const char* a2, const char* a3) {
+    const char* l[] = { "Start again", "Cancel" };
+    if (ask("This starts Theme Park again for the network game.\n"
+            "The park you are playing now is not kept (save a state first if you want it).", l, 2) != 0) return;
+    char exe[4096];
+    ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+    if (n <= 0) return;
+    exe[n] = 0;
+    char* argv[] = { exe, (char*)a1, (char*)a2, (char*)a3, NULL };
+    execv(exe, argv);
+}
+
+static void network_menu(void) {
+    char text[400], addr[256], hosts[3][8], last[48];
+    if (!net_n) {
+        GetPrivateProfileStringA("net", "join", "127.0.0.1", addr, sizeof addr, ini_path);
+        int had = net_last_hosted();
+        snprintf(text, sizeof text, "A network game for 2 to 4 players. One hosts (TCP port 7790), the others join.\n\n"
+                 "Join connects to %s: change it with [net] join= in themepark.ini.", addr);
+        snprintf(last, sizeof last, "Resume my %d-player game", had);
+        const char* l[] = { "Host 2", "Host 3", "Host 4", "Join", last, "Cancel" };
+        int c = ask(text, l, had ? 6 : 5);
+        if (!had && c == 4) c = -1;
+        if (c >= 0 && c < 3) { snprintf(hosts[c], sizeof hosts[c], "%d", c + 2); relaunch("--host", hosts[c], NULL); }
+        else if (c == 3) relaunch("--join", addr, NULL);
+        else if (c == 4) { snprintf(hosts[0], sizeof hosts[0], "%d", had); relaunch("--host", hosts[0], "--resume"); }
+        return;
+    }
+    static char names[4][16];
+    const char* l[5];
+    int who[4], n = 0;
+    for (int j = 0; j < net_n; j++) {
+        if (j == net_me) continue;
+        snprintf(names[n], sizeof names[n], "Player %d%s", j + 1, net_player_up(j) ? "" : " (away)");
+        l[n] = names[n]; who[n++] = j;
+    }
+    l[n] = "Cancel";
+    snprintf(text, sizeof text, "You are player %d of %d. House rules: give money, share research%s.",
+             net_me + 1, net_n, net_me == 0 ? ", and as the host grant or fine" : "");
+    int c = ask(text, l, n + 1);
+    if (c < 0) return;
+    int j = who[c];
+    const char* a[] = { "Give 1000", "Give 10000", "Give 50000", net_sharing[j] ? "Stop sharing research" : "Share research",
+                        "Grant 10000", "Fine 10000", "Cancel" };
+    if (net_me != 0) a[4] = "Cancel";
+    snprintf(text, sizeof text, "Player %d", j + 1);
+    int k = ask(text, a, net_me == 0 ? 7 : 5);
+    static const int give[] = { 1000, 10000, 50000 };
+    if (k >= 0 && k < 3) net_rules_give(j, give[k]);
+    else if (k == 3) net_rules_share(j, !net_sharing[j]);
+    else if (k == 4 && net_me == 0) net_rules_grant(j, 10000);
+    else if (k == 5 && net_me == 0) net_rules_grant(j, -10000);
+}
+
 /* F10, or a right-click on the bars. */
 static void settings_menu(void) {
     char text[512], ini_hires[8], sizes[4][32];
@@ -286,10 +345,14 @@ static void settings_menu(void) {
              "F12 scaling, F9 colour, F11 fullscreen, Ctrl+PgUp/PgDn speed, R 640x480 in a park",
              scale_labels[g_present.scale], g_present.look ? "vivid" : "natural", game_fps,
              muted ? "muted" : "on", hires ? "yes" : "no");
-    const char* top[] = { "Save state", "Load state", "Window size", "Scaling", "Speed", "More", "Close" };
-    switch (ask(text, top, 7)) {
+    const char* top[] = { "Save state", "Load state", "Network", "Window size", "Scaling", "Speed", "More", "Close" };
+    int c = ask(text, top, 8);
+    if (c == 2) { network_menu(); return; }
+    if (c > 2) c--;
+    switch (c) {
     case 0: state_menu(0); return;
-    case 1: state_menu(1); return;
+    case 1: if (net_n) { const char* ok[] = { "Close" }; ask("Loading a state is off in a network game: it would leave the others behind.", ok, 1); return; }
+            state_menu(1); return;
     case 2: {
         const char* l[6];
         int n = 0, ks[4];

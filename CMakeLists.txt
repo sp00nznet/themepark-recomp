@@ -29,6 +29,7 @@ set(HOST
   src/runtime/audio.c
   src/runtime/sound.c
   src/runtime/net.c
+  src/runtime/net_rules.c
   src/runtime/pad.c)
 
 if(WIN32)

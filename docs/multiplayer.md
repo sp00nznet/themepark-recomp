@@ -8,12 +8,17 @@ recomp now carries it over TCP, so it runs on a LAN or the internet (issue #2).
 ## Playing
 
 Up to **4 players**. One hosts and the others join; the host needs its port
-(TCP 7790 by default) reachable from the others.
+(TCP 7790 by default) reachable from the others. From the settings menu (F10,
+or a right-click on the bars), *Network game*: *Host a game for N players*,
+*Join a game...* (it asks for the host's address and remembers it) or *Resume
+the game I hosted*. Each starts the program again for the network game. Or
+from the command line:
 
 ```
 themepark.exe --host 2                 player 1 of 2: waits for one more player
 themepark.exe --join 192.168.1.20      the others: the host's address (or ADDR:PORT)
 themepark.exe --host 4 --port 8000     another port; joiners then use ADDR:8000
+themepark.exe --host 2 --resume        the host, after its own crash (below)
 ```
 
 The host waits at start-up until every player has joined, and then everyone
@@ -33,11 +38,49 @@ park. Everything else is the normal game, plus:
   player has reached it.
 
 All players move in step, so the game runs at the speed of the slowest
-machine. If anyone quits or loses the connection, the game ends for everyone
-(the others print *a player has left the game* and close).
+machine. Loading a save state is switched off in a network game: it would put
+that machine somewhere the others aren't.
 
-Don't use save states (F10) in a network game: loading one puts that machine
-somewhere the others aren't.
+### Dropping out and back in
+
+If a player's game crashes, or their connection drops, nobody else's game
+ends: everyone waits, and the title bar says who for. To come back:
+
+- **A player** starts Theme Park again and joins the same host (*Join a
+  game...*, or `--join`), then clicks the title screen once. They get their
+  old place, and their park comes straight back.
+- **The host** starts again with *Resume the game I hosted* (`--host N
+  --resume`) and clicks the title. The others reconnect on their own.
+
+The game then carries on from the last checkpoint every player has. Each
+machine saves one every 30 seconds of play (on the park's frame, in the
+`states` folder beside the program, the last six kept), so at most about 30
+seconds are played again, by everyone. Whatever happened after that
+checkpoint, house rules included, is undone, as it is for the park itself.
+
+A player who left while a screen of the game's own was open (the year-end
+report, say) comes back when that player's machine is back on the park, so
+close it. If no checkpoint is shared by everyone (a player dropped in the
+first 30 seconds), the game cannot carry on and says so.
+
+### House rules
+
+The settings menu's *Network game* has a submenu for each other player:
+
+- **Give** 1000, 5000, 10 000 or 50 000 of your own cash. It is booked in
+  your accounts as *Misc.* and in theirs as a *Cash award*, and it needs the
+  money: you can't give what you haven't got.
+- **Share my research with them**: every ride, shop and feature you discover
+  from then on, they get too, as if they had researched it (the research
+  button flashes). Two players who both share have a research agreement;
+  one can share without the other.
+- **Grant** or **fine** 1000, 10 000 or 50 000, the host only: money from
+  nowhere, or taken away. For house rules like Monopoly's money on Free
+  Parking, or a handicap for the best player.
+
+There is no lending as such: give the money, and give it back later. Each
+park's own bank still lends as in one-player games. These are friendly
+rules: they trust the players, like the rest of the network game.
 
 ## How it works
 
@@ -79,7 +122,7 @@ at +1 and two word arguments at +2 and +4, dispatched through the table at
   - `0x32` / `0x34`: ready, counted in `0x4C7786` (the year-end barrier,
     `0x466D8C`)
   - `0x36`: thugs (below)
-  - `0x38`: money and a message
+  - `0x38`: a cheat: money and a *HAS JUST CHEATED!* message
   - `0x3A`: new game, with a 32-bit seed (`0x4C3AF4`)
   - `0x40`: ask for a full sync
   - `0x42`: game speed (`0x4C6634`)
@@ -120,7 +163,7 @@ past the records.
 ## The recomp's transport
 
 `src/runtime/net.c` replaces only the transport; every byte the game sends is
-its own. Six functions are taken over (`run_lift.py` `OVERRIDES`):
+its own. These functions are taken over (`run_lift.py` `OVERRIDES`):
 
 | Function | On DOS | Here |
 |---|---|---|
@@ -129,6 +172,8 @@ its own. Six functions are taken over (`run_lift.py` `OVERRIDES`):
 | `0x439414` | make the sessions | fill in what they would have: player count `0x4A91A9`, own number `0x4A91A7`, the slot table `0x4C7810` |
 | `0x438F65` | send on a session | send to that player |
 | `0x4390DF` | receive on a session | wait for exactly that many bytes from that player |
+| `0x41CCF8` | the command dispatcher | note who called it (below) |
+| `0x4399F2` | the frame's exchange | checkpoints, rollbacks and house rules, then the game's own |
 | `0x439B20` | hang up | close the links |
 
 Which player a send or receive is for comes from its session block: the
@@ -137,18 +182,76 @@ per player), and the game's own set-up still allocates those blocks.
 
 The links are a star: each joining machine connects to the host, which is
 player 1, the game's master. The host passes on what other players send each
-other. Each message is a small header (to, from, length) and the bytes. Every
-pair of players is a stream in order, and that is all the game needs: every
-receive asks for exactly what the other side sent. `TCP_NODELAY` keeps the
-per-frame 10-byte messages from waiting. `TP_NETLOG=1` logs every transfer
-bigger than a frame's command, which shows the syncs.
+other. Each message is a header (to, from, type, epoch, length) and the
+bytes. Every pair of players is a stream in order, and that is all the game
+needs: every receive asks for exactly what the other side sent. `TCP_NODELAY`
+keeps the per-frame 10-byte messages from waiting. `TP_NETLOG=1` logs every
+transfer bigger than a frame's command (which shows the syncs), each
+checkpoint and each rollback.
+
+### Checkpoints and rollbacks
+
+A checkpoint has to be taken where every machine is at the same point of the
+game's traffic, and where a machine that has just started can get back to.
+The frame's exchange is the first: each machine has sent and received the
+same frames when it gets there. For the second it must be called from the
+main loop's frame (`0x40226C`, which runs in every state of the game, the
+title included, at one depth of the stack) and not from a screen's own loop
+(the year-end report `0x464B84`, the barrier `0x466DB5`, `0x46B78D`,
+`0x46C03E`). The lifted code pushes a dummy return address, so the caller is
+told by the dispatcher's override, which sees its caller in `g_cur_func`.
+
+Frames are counted from the moment the sessions exist (`0x4A91AB`), so every
+machine's frame N is the same frame. Every 750 of them (`TP_NET_CP`) each
+machine saves a pcrecomp save state, `states/net-GAME-pPLAYER-FRAME.tps`,
+keeps the list in `net-GAME-pPLAYER.txt`, and tells the host. When a link
+breaks, the host marks that player away and tells the others; a joiner whose
+host has gone keeps redialling. A new program that joins a game under way
+gets the place that is free (or the one it had: `net-last-join.txt`), and
+sends its list of checkpoints. Once every player is back, the host picks the
+newest checkpoint on every list and announces a rollback with a new epoch.
+
+From then until it has loaded that checkpoint, a machine's sends go nowhere
+and its receives come back blank, so it runs on to its next main-loop frame,
+where it loads the state and carries on. A program that has just started is
+on the title screen, which does not run the frame tick; the click on the
+title gets it to the name prompt, which does, at the same depth as the park,
+so the state loads there and the park comes back. Traffic from before the
+rollback carries the old epoch and is dropped.
+
+### House rules
+
+`src/runtime/net_rules.c`. An action goes to the receiving player's machine
+as a message of its own and is done there at the next main-loop frame, on
+the game thread. Only the receiver's own park changes, and that is the only
+park its machine simulates; the others see the result in the charts at the
+next sync.
+
+- **Money** goes through the game's ledger, `0x468943(category, amount)`,
+  called on the guest stack. It changes the cash (`[0x4C3808]+0x0A`) and
+  books the entry, so the finance screens and the year's accounts agree.
+  A gift is category `0x18` (*Misc.*) out of the giver, after a check that
+  cash less money committed (`+0x0E`) covers it, and `0x0F` (*Cash award*)
+  into the receiver. The host's grants are `0x0F`, its fines `0x18`.
+- **Research.** Which rides, shops and features are available is a flag
+  byte per item in tables each machine keeps for itself, and no sync carries
+  them: rides `0x4BCED0` (29 x 0xC8, flag at +0xC5), shops `0x4C3C62`
+  (17 x 0x6B, +0x66), features `0x4BCA92` (19 x 0x38, +0x13). Bit 0 is
+  available, bit 1 new. Each main-loop frame, any item that has become
+  available is sent to the players this machine shares with; the receiver
+  sets bits 0 and 1, as the game's research does (`0x443F13`), and flashes
+  the research button (`0x4C7768`). The build menus are rebuilt from the
+  flags each time they open.
+
+The game's own opcode `0x38` is a cheat, not a gift: it adds an amount from
+the receiver's own command slot, books nothing, and shows *%s HAS JUST
+CHEATED!*. Nothing sends it.
 
 ## Tested
 
 Headless, on one machine: each player scripted into a park through the usual
 menus, and dumps of memory compared. `py -3 tools/mpcheck.py --players N`
-does it again: it checks the connection, the sync and the thugs, and passes
-for 2, 3 and 4.
+does it again (2, 3 and 4 pass), and `--rejoin` the crash and rejoin.
 
 - **2, 3 and 4 players** all connect and get numbers 1 to N, and every park
   runs.
@@ -158,12 +261,25 @@ for 2, 3 and 4.
 - **Thugs:** Ctrl+T from player 1 (2 players) and from player 3 (3 and 4
   players, so through the host's relay) puts one thug in every other park
   and none in the sender's. The sender's money drops by 5000 x players.
+- **House rules:** the host gives player 2 5000 and grants them 20 000:
+  player 2 ends exactly 30 000 above the host (less the thugs, when player 2
+  sent them). A ride that becomes available on the host turns up in player
+  2's park.
+- **A player crashing:** player 2's program ends at 65 s; the host waits; a
+  new program joins with one click on the title, and both go back to the
+  checkpoint at frame 1350. Player 2's park is back with the 20 000 granted
+  before the crash, and thugs the host sends afterwards arrive.
+- **The host crashing:** the host ends at 65 s; player 2 waits and redials;
+  the host comes back with `--resume` and a click; both go back to frame
+  1350, and the host's thugs reach player 2.
 - **Both clocks:** the virtual clock and real time (`TP_REALTIME=1`).
-- One-player conformance is unchanged (6/6).
+- One-player conformance is unchanged (6/6). The network files compile
+  warning-free on Linux.
 
-Not tested yet: two players at windows by hand, over a real LAN, or with
-Linux and Windows mixed; a long game; the stock market and the other shared
-opcodes (`0x38`, `0x3C`, `0x3E`, `0x5A`) in play; and the multiplayer-only
-panel at `0x46BFFD`. A note in the code also says buying shares skips the
-money check in a network game (`0x446AFA`, `0x446C85`); that is not yet
-confirmed in play.
+Not tested yet: the settings menu's *Network game* by hand (it is built on
+Windows and Linux, not yet clicked), two players at windows, over a real LAN,
+or with Linux and Windows mixed; a long game; a drop during the year end; the
+stock market and the other shared opcodes (`0x3C`, `0x3E`, `0x5A`) in play;
+and the multiplayer-only panel at `0x46BFFD`. A note in the code also says
+buying shares skips the money check in a network game (`0x446AFA`,
+`0x446C85`); that is not yet confirmed in play.

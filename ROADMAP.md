@@ -10,12 +10,12 @@
   sounds thin.
 - **Quick-save keys and autosave** on top of the save states.
 - **Fixes to the original's own bugs** as they turn up, each documented.
-- **The network game, by hand** (#2): it runs over TCP for 2-4 players and
-  stays in sync headless (docs/multiplayer.md). Still to do: play it at
-  windows and over a LAN, a long game, the stock market and the other
-  shared commands, and Windows with Linux. Then a gentler exit when a
-  player leaves (today the game just closes), and a way to host and join
-  from the settings menu.
+- **The network game, by hand** (#2): it runs over TCP for 2-4 players,
+  stays in sync, survives a crash, and has house rules, all tested headless
+  (docs/multiplayer.md). Still to do: the menu and two windows by hand, a
+  LAN, Windows with Linux, a long game, a drop during the year end, the
+  stock market. Maybe: loans between players with repayments, a chat line,
+  a way to carry on without a player who is not coming back.
 - **Linux, played by hand**: the window, captured mouse, dialogs and pad have
   only run headless or briefly; music needs a synth on ALSA, so a bundled
   soundfont would help here most of all.
