@@ -64,6 +64,8 @@ OVERRIDES = {
     0x00470BE4: 'pace_retrace',
     # Bullfrog's memory manager grabs all memory: leave the C library some.
     0x00472950: 'hold_back_memory',
+    # Custom resolutions (#11): the 640x480 mode set and the VESA call under it.
+    0x0046ECF0: 'hires_mode', 0x0046E658: 'vesa_set',
     # HMI SOS, replaced at its edge (src/runtime/sound.c, docs/sound.md).
     # Detection, system init and shutdown: there is no card to find.
     0x00475793: 'sos_ok', 0x00475950: 'sos_ok', 0x00475F3E: 'sos_ok', 0x004758FC: 'sos_ok',
@@ -122,6 +124,41 @@ def prefix_symbols(out):
             src = open(p, encoding='utf-8').read()
             open(p, 'w', encoding='utf-8', newline='\n').write(
                 sym.sub(lambda m: 'intro_' + (m.group(1) or m.group(2)), src))
+
+
+# Custom resolutions (#11): instructions whose 640 or 480 is the park view's
+# size rather than a coordinate, lifted with a variable (game.c) in its place.
+# Each maps to (constant, variable); 640/480 unless a wider mode is chosen.
+SCREEN_SITES = {a: ('0x280u', 'tp_w') for a in (
+    0x004043BD, 0x00406CB8, 0x00406D70, 0x00406E28, 0x00406EE0, 0x00407D41, 0x004084FB, 0x0040A1C0,
+    0x0042C151, 0x0042C22A, 0x0042D317, 0x0042FF96, 0x00430047, 0x00430061, 0x0043014E, 0x004304F4,
+    0x00430541, 0x00430582, 0x004374F0, 0x00437938, 0x00437AAB, 0x00437B3E, 0x00437E4C, 0x00449C19,
+    0x004539CC)}
+
+
+def patch_screen_sites(out):
+    """Put the view-size variables in at SCREEN_SITES (and on a cmp's flag line)."""
+    done = set()
+    for fn in os.listdir(out):
+        if not (fn.startswith('recomp_0') and fn.endswith('.c')):
+            continue
+        p = os.path.join(out, fn)
+        lines = open(p, encoding='utf-8').read().split('\n')
+        for i, l in enumerate(lines):
+            m = re.search(r'/\* 0x([0-9A-F]{8}): ', l)
+            site = m and SCREEN_SITES.get(int(m.group(1), 16))
+            if not site:
+                continue
+            const, var = site
+            for j in (i, i + 1):
+                if j == i or lines[j].lstrip().startswith('_flag_a'):
+                    lines[j] = lines[j].replace(const, '(uint32_t)' + var)
+            done.add(int(m.group(1), 16))
+        lines.insert(lines.index('#include "recomp_funcs.h"') + 1, 'extern int32_t tp_w, tp_h, tp_vh;')
+        open(p, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
+    missing = set(SCREEN_SITES) - done
+    if missing:
+        print('[!] screen sites not found: ' + ' '.join('0x%08X' % a for a in sorted(missing)))
 
 
 def head_disassemble_function(md, code, cs, start, end, heads):
@@ -281,6 +318,8 @@ def main():
 
     if args.intro:
         prefix_symbols(args.out)
+    else:
+        patch_screen_sites(args.out)
 
     lines = sum(sum(1 for _ in open(os.path.join(args.out, fn), encoding='utf-8', errors='replace'))
                 for fn in os.listdir(args.out) if fn.startswith('recomp_'))

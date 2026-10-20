@@ -119,3 +119,24 @@ void hold_back_memory(void (*lifted)(void)) {
     lifted();
     if (held) dos32_heap_free(held);
 }
+
+/* ---- custom resolutions (#11) ------------------------------------------ */
+extern uint32_t g_esp;
+#define M32W(a) (*(uint32_t*)dos32_mem(a))
+int wide_w = 0, wide_h = 0;    /* 0: the game's 640x480 */
+int32_t tp_w = 640, tp_h = 480, tp_vh = 400;   /* the park view; lifted code reads them */
+
+void vesa_set(void (*lifted)(void)) {
+    if (wide_w && (M32W(g_esp + 4) & 0x1FF) == 0x101) M32W(g_esp + 4) = 0x103;
+    lifted();
+}
+
+void hires_mode(void (*lifted)(void)) {
+    lifted();
+    if (!wide_w) return;
+    tp_w = wide_w; tp_h = wide_h; tp_vh = wide_h - 80;
+    M32W(0x4CE5B8) = wide_w; M32W(0x4CE5C0) = wide_h;               /* screen width, height */
+    M32W(0x4CE5D0) = 0; M32W(0x4CE5E0) = 0;                          /* clip window */
+    M32W(0x4CE5C8) = wide_w; M32W(0x4CE5F0) = wide_h;
+    M32W(0x4CE5EC) = wide_w; M32W(0x4CE5D8) = wide_h;
+}

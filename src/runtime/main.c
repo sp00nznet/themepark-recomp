@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
     audio_init(headless || sound_mute);
     /* Headless runs keep their own time: the same script gives the same run. */
     if (headless && !getenv("TP_REALTIME")) dos32_virtual_clock = 1;
+    { extern int wide_w, wide_h; const char* r = getenv("TP_RES"); if (r) sscanf(r, "%dx%d", &wide_w, &wide_h); }
     if (record_path) start_record();
     dos32_on_retrace = on_retrace;
     if (seconds > 0 && !dos32_virtual_clock)   /* a hung program still stops */
