@@ -68,6 +68,7 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 | Mods | a folder laid over the game's files ([mods/README.md](mods/README.md)) |
 | Settings menu (F10) | scaling, colour, speed, fullscreen, mute, 640x480 default |
 | 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
+| Wider parks | the park at any width from 640 to 1920 at 480 high (16:9 is 856x480): F10, *Park resolution*, or `--res`; the panel stays 640 wide ([docs/resolutions.md](docs/resolutions.md)) |
 | Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
 | Music | the game's General MIDI songs on the Windows synth |
 | Save states | 9 slots in the settings menu (F10) |
@@ -187,6 +188,7 @@ themepark.exe                       play in a window: F10 for the settings menu 
                                     F11 / Alt+Enter fullscreen
 themepark.exe --fps 35              the game's speed: frames per second (default 25; Ctrl+PgUp/PgDn in game)
 themepark.exe --nointro             straight to the title, no opening film ([game] intro=0 to keep it so)
+themepark.exe --res 856x480         a wider park: 640 to 1920 wide, 480 high (F10, Park resolution)
 themepark.exe --lowres              parks in 320x200, as the original started (R toggles either way)
 themepark.exe --scale crt           scaling: integer (default), sharp, smooth, crt, nearest
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
@@ -215,7 +217,7 @@ the buttons, D-pad or right stick to scroll, LB / RB speed, Y the 640x480
 switch, X Space, Start Esc, Back F1 (not yet tried on a real pad).
 
 Display choices are remembered in `themepark.ini` beside the exe (`[display]
-scale`, `vivid`, `fullscreen`, `vsync`, `window`; `[game] fps`, `hires`, `intro`).
+scale`, `vivid`, `fullscreen`, `vsync`, `window`; `[game] fps`, `hires`, `intro`, `res`).
 
 Headless runs keep their own clock, so the same script gives the same run every
 time, faster than real time. Debugging aids (`--watch`, `--dump`, `--log`,
