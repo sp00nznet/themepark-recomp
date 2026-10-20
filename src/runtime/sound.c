@@ -31,6 +31,7 @@
 #include "recomp_types.h"
 #include "dos32.h"
 #include "audio.h"
+#include "music.h"
 
 #define M8(a)  (*(uint8_t*)dos32_mem(a))
 #define M16(a) (*(uint16_t*)dos32_mem(a))
@@ -121,6 +122,9 @@ typedef struct {
     volatile int tempo;         /* percent */
     double left;                /* headless: seconds of guest time still to "play" */
     HANDLE thread;
+    const char* name;           /* the game's name for it (music.c), "" if unknown */
+    int16_t* pcm;               /* playing from a music pack instead: the recording */
+    int voice;                  /* its mixer voice */
 } song_t;
 
 /* The synth. Windows: its General MIDI synth (the MIDI mapper). Linux: the
@@ -289,6 +293,23 @@ static DWORD WINAPI song_thread(LPVOID p) {
 static void song_stop(song_t* s) {
     s->playing = 0;
     if (s->thread) { WaitForSingleObject(s->thread, 2000); CloseHandle(s->thread); s->thread = NULL; }
+    if (s->pcm) { audio_stop(s->voice); free(s->pcm); s->pcm = NULL; s->voice = 0; }
+}
+
+/* A music pack's recording of the song, on a mixer voice; 0 if none. Decoded
+ * as it starts (only the song playing is in memory; a pack picked in the
+ * menu applies from the next song). Not when muted or with no audio device:
+ * a voice that is never mixed would never finish. */
+static int song_start_pack(song_t* s) {
+    uint32_t frames;
+    int ch, rate;
+    if (!sound_headless && (sound_mute || !audio_live())) return 0;
+    if (!s->name || !(s->pcm = music_load(s->name, &frames, &ch, &rate))) return 0;
+    s->playing = 1;
+    s->left = (double)frames / rate;
+    if (!sound_headless || !sound_mute)
+        s->voice = audio_play_ch(s->pcm, frames * ch * 2, 16, 1, ch, rate, midi_volume, 64, 0);
+    return 1;
 }
 
 /* sosMIDIInitDriver(id, far *hw, far *init, far *handle) */
@@ -326,6 +347,7 @@ void sos_midi_init_song(void (*lifted)(void)) {
     uint32_t data = M32(desc);
     if (!parse_hmp(dos32_mem(data), 0x400000, &songs[k])) { ret(1); return; }
     songs[k].tempo = 100;
+    songs[k].name = music_song_name(dos32_mem(data));
     M32(hp) = k;
     ret(0);
 }
@@ -335,8 +357,9 @@ void sos_midi_start(void (*lifted)(void)) {
     (void)lifted;
     song_t* s = &songs[ARG(0) & 7];
     song_stop(s);
-    if (sound_headless) fprintf(stderr, "[sound] song start: %d events, %.0f s\n", s->n,
-                                s->n ? (double)s->ev[s->n - 1].tick / s->rate : 0.0);
+    if (song_start_pack(s)) { ret(0); return; }
+    if (sound_headless) fprintf(stderr, "[sound] song start: %s, %d events, %.0f s\n", s->name && s->name[0] ? s->name : "?",
+                                s->n, s->n ? (double)s->ev[s->n - 1].tick / s->rate : 0.0);
     if (sound_headless && s->ev) { s->left = s->n ? (double)s->ev[s->n - 1].tick / s->rate : 0; s->playing = 1; }
     if (s->ev && midi) {
         s->playing = 1;
@@ -358,7 +381,14 @@ void sos_midi_uninit_song(void (*lifted)(void)) {
 }
 
 /* sosMIDISongDone(song) -> 1 if not playing */
-void sos_midi_done(void (*lifted)(void)) { (void)lifted; ret(!songs[ARG(0) & 7].playing); }
+static volatile int songs_end;   /* sound_pick_music: end what plays, the game starts the next */
+
+void sos_midi_done(void (*lifted)(void)) {
+    (void)lifted;
+    song_t* s = &songs[ARG(0) & 7];
+    if (songs_end) { songs_end = 0; for (int k = 0; k < 8; k++) song_stop(&songs[k]); }
+    ret(s->pcm && !sound_headless ? !audio_playing(s->voice) : !s->playing);
+}
 
 /* sosMIDISetTempo(song, percent) */
 void sos_midi_tempo(void (*lifted)(void)) {
@@ -374,6 +404,7 @@ void sos_midi_tempo(void (*lifted)(void)) {
 void music_volume(void (*lifted)(void)) {
     (void)lifted;
     midi_volume = (int)(ARG(0) & 0x7F);
+    for (int k = 0; k < 8; k++) if (songs[k].pcm) audio_set(songs[k].voice, midi_volume, -1, -1);
     if (midi) {
         EnterCriticalSection(&midi_lock);
         for (int c = 0; c < 16; c++)
@@ -404,6 +435,13 @@ void sound_tick(double dt) {
     for (int k = 0; k < 8; k++)
         if (sound_headless && songs[k].playing && (songs[k].left -= dt * (songs[k].tempo > 0 ? songs[k].tempo : 100) / 100.0) <= 0)
             songs[k].playing = 0;
+}
+
+/* The settings menu's music pack ("" for the game's MIDI): the song playing
+ * ends at the game's next check, and the one it starts next is the new pack's. */
+void sound_pick_music(const char* pack) {
+    music_set_pack(pack);
+    songs_end = 1;
 }
 
 /* The settings menu's mute: everything silent, nothing stopped. */

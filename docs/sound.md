@@ -86,6 +86,19 @@ sees it finish, and each start is logged:
 [sound] song start: 668 events, 23 s
 ```
 
+## Music packs
+
+A pack (music/README.md) replaces songs with recordings. The game hands SOS
+only a song's HMP bytes, so music.c names the song by finding those bytes in
+the game's banks: each `.TAB` entry is 32 bytes, the name at +0, the offset
+into the `.DAT` at +0x12, the length at +0x1A, and all three variants are
+searched. When a named song starts and the pack has a file for it, the file is
+decoded (stb_vorbis for Ogg, or a WAV reader) and played on a stereo mixer
+voice instead of the sequencer, and "song done" asks the mixer. Decoding
+happens at the start, so only the playing song is in memory. Picking a pack in
+the menu ends the songs playing at the game's next "done?" poll, on the game
+thread, and the game starts its next song from the new pack.
+
 ## Two things that were in the way
 
 - **Memory.** Bullfrog's memory manager (`0x472950`) mallocs every block it can

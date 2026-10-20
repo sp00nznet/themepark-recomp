@@ -27,6 +27,7 @@
 #include "dos32.h"
 #include "present.h"
 #include "pad.h"
+#include "music.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
@@ -49,6 +50,7 @@ extern char state_note[];
 extern volatile DWORD state_note_until;
 void state_path(int slot, char* out, size_t n);
 void sound_set_mute(int on);                    /* sound.c */
+void sound_pick_music(const char* pack);
 
 int present_scale_from_name(const char* name) {
     for (int i = 0; i < SCALE_COUNT; i++) if (!_stricmp(name, scale_names[i])) return i;
@@ -286,8 +288,8 @@ static void settings_menu(void) {
              "F12 scaling, F9 colour, F11 fullscreen, Ctrl+PgUp/PgDn speed, R 640x480 in a park",
              scale_labels[g_present.scale], g_present.look ? "vivid" : "natural", game_fps,
              muted ? "muted" : "on", hires ? "yes" : "no");
-    const char* top[] = { "Save state", "Load state", "Window size", "Scaling", "Speed", "More", "Close" };
-    switch (ask(text, top, 7)) {
+    const char* top[] = { "Save state", "Load state", "Window size", "Scaling", "Speed", "Music", "More", "Close" };
+    switch (ask(text, top, 8)) {
     case 0: state_menu(0); return;
     case 1: state_menu(1); return;
     case 2: {
@@ -324,6 +326,23 @@ static void settings_menu(void) {
         if (c >= 0) set_speed(speeds[c]);
         break; }
     case 5: {
+        static char packs[14][64];
+        const char* l[16];
+        int n = music_packs(packs, 14);
+        l[0] = "The game's own (MIDI)";
+        for (int i = 0; i < n; i++) l[1 + i] = packs[i];
+        l[n + 1] = "Cancel";
+        char t[160];
+        snprintf(t, sizeof t, "Music: %s\n\nA pack is a folder of recordings in music/ (music/README.md).",
+                 music_pack()[0] ? music_pack() : "the game's own (MIDI)");
+        int c = ask(t, l, n + 2);
+        if (c >= 0) {
+            const char* p = c == 0 ? "" : packs[c - 1];
+            sound_pick_music(p);
+            WritePrivateProfileStringA("sound", "music", p, ini_path);
+        }
+        break; }
+    case 6: {
         const char* l[] = { g_present.look ? "Natural colour" : "Vivid colour", muted ? "Sound on" : "Mute",
                             hires ? "Parks in 320x200" : "Parks in 640x480", "Cancel" };
         int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 4);

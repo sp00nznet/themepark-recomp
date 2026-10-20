@@ -27,6 +27,7 @@
 #include "dos32.h"
 #include "present.h"
 #include "pad.h"
+#include "music.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
@@ -202,6 +203,7 @@ static void key(LPARAM lp, int down) {
 }
 
 void sound_set_mute(int on);           /* sound.c */
+void sound_pick_music(const char* pack);
 static int muted;
 
 static void set_speed(int fps) {
@@ -252,12 +254,18 @@ static int slot_label(int slot, char* out, size_t n) {
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
-           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600 };
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
     HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
-          sv = CreatePopupMenu(), ld = CreatePopupMenu();
+          sv = CreatePopupMenu(), ld = CreatePopupMenu(), mu = CreatePopupMenu();
+    static char packs[32][64];
+    int npacks = music_packs(packs, 32);
+    AppendMenuA(mu, MF_STRING | (!music_pack()[0] ? MF_CHECKED : 0), ID_MUSIC, "The game's own (MIDI)");
+    for (int i = 0; i < npacks; i++)
+        AppendMenuA(mu, MF_STRING | (!_stricmp(music_pack(), packs[i]) ? MF_CHECKED : 0), ID_MUSIC + 1 + i, packs[i]);
+    if (!npacks) AppendMenuA(mu, MF_STRING | MF_GRAYED, 0, "No packs in the music folder (music\\README.md)");
     for (int k = 2; k <= max_window_k(); k += 2) {
         char t[48];
         snprintf(t, sizeof t, "%dx\t%d x %d", k / 2, 320 * k, 240 * k);
@@ -287,6 +295,7 @@ static void settings_menu(int sx, int sy) {
     AppendMenuA(m, MF_STRING | (g_present.look ? MF_CHECKED : 0), ID_VIVID, "Vivid colour\tF9");
     AppendMenuA(m, MF_STRING | (g_present.fullscreen ? MF_CHECKED : 0), ID_FULL, "Fullscreen\tF11");
     AppendMenuA(m, MF_STRING | (muted ? MF_CHECKED : 0), ID_MUTE, "Mute");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)mu, "Music");
     AppendMenuA(m, MF_STRING | (ini_hires[0] != '0' ? MF_CHECKED : 0), ID_HIRES,
                 "Open parks in 640x480 (R switches in a park)");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
@@ -305,6 +314,11 @@ static void settings_menu(int sx, int sy) {
     else if (cmd == ID_FULL) apply_fullscreen(!g_present.fullscreen);
     else if (cmd == ID_MUTE) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
     else if (cmd == ID_HIRES) WritePrivateProfileStringA("game", "hires", ini_hires[0] != '0' ? "0" : "1", ini_path);
+    else if (cmd >= ID_MUSIC && cmd <= ID_MUSIC + npacks) {
+        const char* p = cmd == ID_MUSIC ? "" : packs[cmd - ID_MUSIC - 1];
+        sound_pick_music(p);
+        WritePrivateProfileStringA("sound", "music", p, ini_path);
+    }
     if (cmd) { save_settings(); title_until = GetTickCount() + 2000; }
 }
 

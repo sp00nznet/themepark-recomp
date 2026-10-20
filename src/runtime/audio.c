@@ -34,6 +34,7 @@ typedef struct {
     uint64_t pos_fx;              /* 48.16 position: 16.16 in 32 bits wrapped at 65536 frames (1.5 s at 44.1 kHz) */
     uint32_t step_fx;             /* 16.16 per output frame */
     int bits, is_signed, loop;   /* loop: repeats left, -1 forever */
+    int ch;                       /* 1, or 2: interleaved stereo (music packs) */
     int vol, pan;                 /* 0..127, 0..127 (64 = centre) */
     int id;                       /* 0 = free */
 } voice_t;
@@ -42,10 +43,12 @@ static voice_t voices[NVOICE];
 static CRITICAL_SECTION lock;
 static int next_id = 1;
 static int master = 127;
+static int live;                  /* a device is open and pulling the mix */
+int audio_live(void) { return live; }
 void (*audio_tap)(const int16_t* stereo, int frames);
 
 static int sample(const voice_t* v, uint32_t i) {
-    if (v->bits == 16) return ((const int16_t*)v->data)[i];
+    if (v->bits == 16) return ((const int16_t*)v->data)[i];   /* i counts samples: frame * ch + channel */
     int s = v->data[i];
     return (v->is_signed ? (int8_t)s : s - 128) << 8;
 }
@@ -67,10 +70,13 @@ static void mix(int16_t* out, int frames) {
                 if (v->loop > 0) v->loop--;          /* -1 loops forever */
                 v->pos_fx -= (uint64_t)v->len << 16; i = (uint32_t)(v->pos_fx >> 16);
             }
-            int a = sample(v, i), b = i + 1 < v->len ? sample(v, i + 1) : a;
-            int s = a + (int)(((int64_t)(b - a) * (v->pos_fx & 0xFFFF)) >> 16);
-            acc[f * 2] += s * gl / 127;
-            acc[f * 2 + 1] += s * gr / 127;
+            int fr = (int)(v->pos_fx & 0xFFFF);
+            for (int c = 0; c < v->ch; c++) {
+                int a = sample(v, i * v->ch + c), b = i + 1 < v->len ? sample(v, (i + 1) * v->ch + c) : a;
+                int s = a + (int)(((int64_t)(b - a) * fr) >> 16);
+                if (v->ch == 1) { acc[f * 2] += s * gl / 127; acc[f * 2 + 1] += s * gr / 127; }
+                else acc[f * 2 + c] += s * v->vol / 127;
+            }
             v->pos_fx += v->step_fx;
         }
     }
@@ -119,7 +125,7 @@ int audio_init(int silent) {
     }
     CloseHandle(CreateThread(NULL, 0, feeder, NULL, 0, NULL));
     SetEvent(ev);
-    return 1;
+    return live = 1;
 }
 #else
 static void SDLCALL pull(void* u, Uint8* out, int bytes) {
@@ -139,7 +145,7 @@ int audio_init(int silent) {
         return 0;
     }
     SDL_PauseAudioDevice(dev, 0);
-    return 1;
+    return live = 1;
 }
 #endif
 
@@ -157,7 +163,12 @@ int audio_rate(void) { return RATE; }
 
 int audio_play(const void* data, uint32_t bytes, int bits, int is_signed, int rate,
                int vol, int pan, int loop) {
-    if (!data || !bytes || rate <= 0) return 0;
+    return audio_play_ch(data, bytes, bits, is_signed, 1, rate, vol, pan, loop);
+}
+
+int audio_play_ch(const void* data, uint32_t bytes, int bits, int is_signed, int ch, int rate,
+                  int vol, int pan, int loop) {
+    if (!data || !bytes || rate <= 0 || ch < 1 || ch > 2) return 0;
     EnterCriticalSection(&lock);
     int k = 0;
     for (; k < NVOICE && voices[k].id; k++) {}
@@ -168,7 +179,8 @@ int audio_play(const void* data, uint32_t bytes, int bits, int is_signed, int ra
     }
     voice_t* v = &voices[k];
     v->data = data;
-    v->len = bytes / (bits == 16 ? 2 : 1);
+    v->len = bytes / (bits == 16 ? 2 : 1) / ch;
+    v->ch = ch;
     v->pos_fx = 0;
     v->step_fx = (uint32_t)(((uint64_t)rate << 16) / RATE);
     v->bits = bits; v->is_signed = is_signed; v->loop = loop;

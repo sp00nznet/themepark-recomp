@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Music packs (#12): the game's songs replaced by recordings, such as the
+  PlayStation version's CD tracks. A pack is a folder, `music\NAME\`, of
+  Ogg Vorbis or WAV files named after the songs (RIDE1 ... RIDE17, FANFARE,
+  INTRO...; music/README.md); songs it lacks stay MIDI. Picked in the
+  settings menu (F10, *Music*), with `--music NAME` or `[sound] music=`, and
+  a change is heard at once. The game's music volume applies.
+
 ### Fixed
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when

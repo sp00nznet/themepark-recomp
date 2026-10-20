@@ -68,7 +68,7 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 | Settings menu (F10) | scaling, colour, speed, fullscreen, mute, 640x480 default |
 | 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
 | Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
-| Music | the game's General MIDI songs on the Windows synth |
+| Music | the game's General MIDI songs on the Windows synth, or a music pack of recordings (F10, *Music*; [music/README.md](music/README.md)) |
 | Save states | 9 slots in the settings menu (F10) |
 | The game's own saves | untested |
 | Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
@@ -190,6 +190,7 @@ themepark.exe --scale crt           scaling: integer (default), sharp, smooth, c
 themepark.exe --fullscreen          borderless fullscreen;  --gdi: no Direct3D;  --vsync 0
 themepark.exe --mute                no sound
 themepark.exe --mod NAME            play with mods\NAME laid over the game's files (mods/README.md)
+themepark.exe --music NAME          the songs from music\NAME, a pack of recordings (music/README.md)
 themepark.exe --lang 1              language: 0 English (default), 1 German, 2 Italian, 3 Spanish, 4 French
 themepark.exe --headless --seconds 60 --record out.mp4
                                     no window: run 60 guest seconds and film it (needs ffmpeg)

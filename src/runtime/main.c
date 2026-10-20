@@ -4,7 +4,7 @@
  *
  *   themepark.exe [--headless] [--record out.mp4] [--seconds N] [--log]
  *                 [--click T:x,y] [--key T:sc] [--save T:slot] [--load T:slot]
- *                 [--game DIR] [--fps N]
+ *                 [--game DIR] [--fps N] [--music PACK]
  *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
  *                 [-- game args]
  *
@@ -21,6 +21,7 @@
 #include "dos32.h"
 #include "present.h"
 #include "audio.h"
+#include "music.h"
 
 extern const uint32_t recomp_image_base, recomp_image_size, recomp_image_stack, recomp_entry_va;
 extern const uint8_t recomp_image[];
@@ -38,6 +39,7 @@ static volatile int exit_code = -1;
 static const char* present_dir;   /* --present-test */
 static int start_hires = 1;       /* --lowres, [game] hires=0: the original's default */
 static char mod_name[MAX_PATH];   /* --mod, [game] mod= */
+static char music_name[64];       /* --music, [sound] music=: a music pack */
 static char overlay[MAX_PATH];
 
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
@@ -209,6 +211,7 @@ int main(int argc, char** argv) {
         if (v[0]) game_fps = atof(v);
         start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
         GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
+        GetPrivateProfileStringA("sound", "music", "", music_name, sizeof music_name, ini);
     }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;
@@ -226,6 +229,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
         else if (!strcmp(argv[i], "--lowres")) start_hires = 0;
         else if (!strcmp(argv[i], "--mod") && i + 1 < argc) snprintf(mod_name, sizeof mod_name, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--music") && i + 1 < argc) snprintf(music_name, sizeof music_name, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--hires")) start_hires = 1;
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) { wav = open_wav(argv[++i]); }
         else if (!strcmp(argv[i], "--present-test") && i + 1 < argc) { present_dir = argv[++i]; headless = 1; }
@@ -270,6 +274,15 @@ int main(int argc, char** argv) {
             return 1;
         }
         cfg.overlay = overlay;
+    }
+    /* Music packs: music\NAME beside mods\, songs named from the game's banks. */
+    {
+        char packs[MAX_PATH], data[MAX_PATH];
+        snprintf(packs, sizeof packs, "%s/../music", root);
+        snprintf(data, sizeof data, "%s/GAME/DATA", root);
+        if (GetFileAttributesA(data) == INVALID_FILE_ATTRIBUTES) snprintf(data, sizeof data, "%s/game/data", root);
+        music_set_dirs(packs, data);
+        music_set_pack(music_name);
     }
     cfg.cwd = "\\GAME";
     cfg.progname = "C:\\GAME\\MAIN.EXE";
