@@ -4,7 +4,7 @@
  *
  *   themepark.exe [--headless] [--record out.mp4] [--seconds N] [--log]
  *                 [--click T:x,y] [--key T:sc] [--save T:slot] [--load T:slot]
- *                 [--game DIR] [--fps N] [--intro | --nointro]
+ *                 [--game DIR] [--fps N] [--res WxH] [--intro | --nointro]
  *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
  *                 [-- game args]
  *
@@ -31,6 +31,8 @@ extern const uint8_t intro_image[];
 extern const recomp_dispatch_entry_t intro_dispatch_table[];
 #endif
 extern double game_fps;   /* game.c */
+extern volatile int res_w;   /* game.c: the park's width (#11) */
+int res_parse(const char* s);
 extern volatile int state_request;   /* game.c: save states */
 extern int sound_mute, sound_headless;   /* sound.c */
 extern uint32_t sound_variant_va, sound_noop_fn;
@@ -103,7 +105,7 @@ static void run_events(void) {
 static FILE* rec;
 static FILE* wav;                /* --wav, or the sound of --record before it is muxed */
 static char rec_video[MAX_PATH], wav_path[MAX_PATH];
-static uint32_t rec_buf[1024 * 768];
+static uint32_t rec_buf[1920 * 1080];
 static int rec_w, rec_h;
 static uint32_t watch[8];
 static uint16_t watch_v[8];
@@ -142,10 +144,10 @@ static void on_retrace(void) {
     }
     if (!rec || (tick++ & 1)) return;
     int w, h;
-    if (!dos32_frame(rec_buf, 1024, 768, &w, &h)) { w = rec_w ? rec_w : 320; h = rec_h ? rec_h : 200; memset(rec_buf, 0, sizeof rec_buf); }
+    if (!dos32_frame(rec_buf, 1920, 1080, &w, &h)) { w = rec_w ? rec_w : 320; h = rec_h ? rec_h : 200; memset(rec_buf, 0, sizeof rec_buf); }
     if (!rec_w) { rec_w = w; rec_h = h; }
     if (w != rec_w || h != rec_h) {   /* one size per file: scale nearest into the first */
-        static uint32_t tmp[1024 * 768];
+        static uint32_t tmp[1920 * 1080];
         for (int y = 0; y < rec_h; y++)
             for (int x = 0; x < rec_w; x++) tmp[y * rec_w + x] = rec_buf[(y * h / rec_h) * w + x * w / rec_w];
         memcpy(rec_buf, tmp, (size_t)rec_w * rec_h * 4);
@@ -243,6 +245,8 @@ int main(int argc, char** argv) {
         GetPrivateProfileStringA("game", "fps", "", v, sizeof v, ini);
         if (v[0]) game_fps = atof(v);
         start_hires = GetPrivateProfileIntA("game", "hires", 1, ini);
+        GetPrivateProfileStringA("game", "res", "", v, sizeof v, ini);
+        res_w = res_parse(v);
         play_intro = GetPrivateProfileIntA("game", "intro", -1, ini);
         GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
     }
@@ -261,6 +265,10 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gdi")) g_present.gdi = 1;
         else if (!strcmp(argv[i], "--mute")) sound_mute = 1;
         else if (!strcmp(argv[i], "--lowres")) start_hires = 0;
+        else if (!strcmp(argv[i], "--res") && i + 1 < argc) {
+            res_w = res_parse(argv[++i]);
+            if (!res_w && strcmp(argv[i], "640x480")) {
+                fprintf(stderr, "themepark: --res is WxH, 640 to 1920 wide and 480 high (e.g. 856x480)\n"); return 2; } }
         else if (!strcmp(argv[i], "--intro")) play_intro = 1;
         else if (!strcmp(argv[i], "--nointro")) play_intro = 0;
         else if (!strcmp(argv[i], "--mod") && i + 1 < argc) snprintf(mod_name, sizeof mod_name, "%s", argv[++i]);

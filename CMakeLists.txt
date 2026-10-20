@@ -12,6 +12,11 @@ if(NOT HAS_STATES)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (pcrecomp#77): git -C ${PCRECOMP} pull")
 endif()
 
+file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_VESA_CUSTOM REGEX "dos32_vesa_custom")
+if(NOT HAS_VESA_CUSTOM)
+  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (dos32_vesa_custom, pcrecomp branch dos32-custom-vesa): git -C ${PCRECOMP} pull")
+endif()
+
 file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.c HAS_POSIX REGEX "fix_case")
 if(NOT WIN32 AND NOT HAS_POSIX)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs on Linux (pcrecomp#84): git -C ${PCRECOMP} pull")

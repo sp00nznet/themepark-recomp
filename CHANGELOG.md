@@ -12,6 +12,14 @@ versions follow [SemVer](https://semver.org/).
   `THEME.CD\` the way the CD's installer did (its 32 files, `SAVE\` and a
   `SNDSETUP.INF`). A MAIN.EXE the lift does not know now stops it with its
   SHA-1, instead of building something whose addresses are wrong.
+- Wider parks (#11): the park's 640x480 screen at any width from 640 to
+  1920, 480 high, picked in F10 (*Park resolution*: 800x480, 856x480 for
+  16:9, 1120x480 for 21:9, or the screen's own shape), `--res WxH` or
+  `[game] res`. The park fills the width, the pointer, edge scrolling and the
+  view reach it, and the panel and the game's screens stay 640 wide at the
+  left. 303 instructions of the lifted C read the screen's size instead of
+  640/480 (docs/resolutions.md). Taller screens are not done yet. Needs
+  pcrecomp's dos32-custom-vesa (a VESA mode of the host's own size).
 - The opening film. It is a program of its own, INTRO.EXE, which the 1994
   installer's and GOG's launchers run before MAIN.EXE; the recomp ran only the
   game. INTRO.EXE is now lifted too (`run_lift.py --intro`, the setup does

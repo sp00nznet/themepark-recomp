@@ -33,7 +33,7 @@ present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 static const char* scale_names[SCALE_COUNT] = { "sharp", "smooth", "crt", "nearest", "integer" };
 static char ini_path[MAX_PATH];
 static HWND wnd;
-static uint32_t frame[1024 * 768];
+static uint32_t frame[1920 * 1080];
 static int fw = 320, fh = 200;
 static RECT dst;                 /* where the picture lands in the client area */
 static int cw, ch;
@@ -78,11 +78,13 @@ static void layout(void) {
         int k = cw / fw < ch / fh ? cw / fw : ch / fh;
         if (k < 1) k = 1;
         w = fw * k; h = fh * k;
-    } else {
-        /* 4:3 whatever the mode's pixel aspect: 320x200 and 640x400 were shown
-         * on 4:3 monitors with tall pixels. */
+    } else if ((fw == 320 && fh == 200) || (fw == 640 && fh == 400)) {
+        /* 4:3: 320x200 and 640x400 were shown on 4:3 monitors with tall pixels. */
         w = cw; h = cw * 3 / 4;
         if (h > ch) { h = ch; w = ch * 4 / 3; }
+    } else {                         /* square pixels: 640x480, and a park's own size */
+        w = cw; h = cw * fh / fw;
+        if (h > ch) { h = ch; w = ch * fw / fh; }
     }
     dst.left = (cw - w) / 2; dst.top = (ch - h) / 2;
     dst.right = dst.left + w; dst.bottom = dst.top + h;
@@ -187,7 +189,7 @@ static void speed_step(int up) {
 static void render(void) {
     pad_poll(fw, fh, speed_step);
     int w, h;
-    if (dos32_frame(frame, 1024, 768, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
+    if (dos32_frame(frame, 1920, 1080, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
     set_title();
     if (g_present.gdi || !d3d_present(wnd, frame, fw, fh, &dst, cw, ch, g_present.scale, g_present.look,
                                       g_present.vsync)) {
@@ -212,13 +214,27 @@ static void set_speed(int fps) {
     title_until = GetTickCount() + 2000;
 }
 
+/* Half the park's width (#11): 320 for 640x480, wider for a park of its own size. */
+extern volatile int res_w;   /* game.c */
+static int step_w(void) { return (res_w > 640 ? res_w : 640) / 2; }
+
+/* The park resolutions the menu offers; 0 is "fit the screen": its shape at 480 high. */
+static const int res_list[] = { 640, 800, 856, 1120, 0 };
+static const char* res_names[] = { "640 x 480 (original)", "800 x 480", "856 x 480 (16:9)",
+                                   "1120 x 480 (21:9)", "Fit the screen" };
+static int res_fit(void) {
+    int w = GetSystemMetrics(SM_CXSCREEN), h = GetSystemMetrics(SM_CYSCREEN);
+    w = h ? (480 * w / h) & ~7 : 640;
+    return w < 640 ? 640 : w > 1920 ? 1920 : w;
+}
+
 /* Window sizes, in 320x240 steps (k); the menu offers the even ones, whole
  * multiples of the park's 640x480: 1x, 2x, 3x, each pixel doubled up. */
 static int max_window_k(void) {
     RECT wa; SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
     int k = 8;
     for (; k > 1; k--) {             /* the whole window, title bar and borders too */
-        RECT r = { 0, 0, 320 * k, 240 * k };
+        RECT r = { 0, 0, step_w() * k, 240 * k };
         AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
         if (r.right - r.left <= wa.right - wa.left && r.bottom - r.top <= wa.bottom - wa.top) break;
     }
@@ -226,7 +242,7 @@ static int max_window_k(void) {
 }
 
 static void size_window(int k) {
-    RECT r = { 0, 0, 320 * k, 240 * k };
+    RECT r = { 0, 0, step_w() * k, 240 * k };
     if (g_present.fullscreen) apply_fullscreen(0);
     ShowWindow(wnd, SW_RESTORE);
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
@@ -252,16 +268,28 @@ static int slot_label(int slot, char* out, size_t n) {
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
-           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600 };
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_RES = 700 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
     HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
-          sv = CreatePopupMenu(), ld = CreatePopupMenu();
+          sv = CreatePopupMenu(), ld = CreatePopupMenu(), rs = CreatePopupMenu();
+    char res_ini[16];
+    GetPrivateProfileStringA("game", "res", "640x480", res_ini, sizeof res_ini, ini_path);
+    int cur = 640, ticked = 0;
+    sscanf(res_ini, "%d", &cur);
+    for (int i = 0; i < (int)(sizeof res_list / sizeof res_list[0]); i++) {
+        int w = res_list[i] ? res_list[i] : res_fit(), on = !ticked && w == cur;
+        char t[64];
+        if (res_list[i]) snprintf(t, sizeof t, "%s", res_names[i]);
+        else snprintf(t, sizeof t, "%s (%d x 480)", res_names[i], w);
+        AppendMenuA(rs, MF_STRING | (on ? MF_CHECKED : 0), ID_RES + i, t);
+        ticked |= on;
+    }
     for (int k = 2; k <= max_window_k(); k += 2) {
         char t[48];
-        snprintf(t, sizeof t, "%dx\t%d x %d", k / 2, 320 * k, 240 * k);
-        AppendMenuA(sz, MF_STRING | (!g_present.fullscreen && cw == 320 * k && ch == 240 * k ? MF_CHECKED : 0), ID_SIZE + k, t);
+        snprintf(t, sizeof t, "%dx\t%d x %d", k / 2, step_w() * k, 240 * k);
+        AppendMenuA(sz, MF_STRING | (!g_present.fullscreen && cw == step_w() * k && ch == 240 * k ? MF_CHECKED : 0), ID_SIZE + k, t);
     }
     for (int slot = 1; slot <= 9; slot++) {
         char t[64];
@@ -289,6 +317,7 @@ static void settings_menu(int sx, int sy) {
     AppendMenuA(m, MF_STRING | (muted ? MF_CHECKED : 0), ID_MUTE, "Mute");
     AppendMenuA(m, MF_STRING | (ini_hires[0] != '0' ? MF_CHECKED : 0), ID_HIRES,
                 "Open parks in 640x480 (R switches in a park)");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)rs, "Park resolution");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
     DestroyMenu(m);
     if (cmd > ID_SAVE && cmd <= ID_SAVE + 9) { state_request = cmd - ID_SAVE; return; }
@@ -305,6 +334,17 @@ static void settings_menu(int sx, int sy) {
     else if (cmd == ID_FULL) apply_fullscreen(!g_present.fullscreen);
     else if (cmd == ID_MUTE) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
     else if (cmd == ID_HIRES) WritePrivateProfileStringA("game", "hires", ini_hires[0] != '0' ? "0" : "1", ini_path);
+    else if (cmd >= ID_RES && cmd < ID_RES + (int)(sizeof res_list / sizeof res_list[0])) {
+        /* Takes effect when the game next sets 640x480 up: a park opening, or R. */
+        int w = res_list[cmd - ID_RES] ? res_list[cmd - ID_RES] : res_fit();
+        char v[16];
+        snprintf(v, sizeof v, "%dx480", w);
+        WritePrivateProfileStringA("game", "res", v, ini_path);
+        res_w = w > 640 ? w : 0;
+        snprintf(state_note, 96, "park resolution %d x 480: at the next park, or R", w);
+        state_note_until = GetTickCount() + 4000;
+        if (!g_present.fullscreen && ch >= 480) size_window(ch / 240);   /* the same scale, the new shape */
+    }
     if (cmd) { save_settings(); title_until = GetTickCount() + 2000; }
 }
 
@@ -409,7 +449,7 @@ int present_test(const char* dir) {
     wnd = CreateWindowA("tp_test", "", WS_POPUP, 0, 0, 1440, 1080, NULL, NULL, wc.hInstance, NULL);
     cw = 1440; ch = 1080;
     int w, h, bad = 0;
-    if (dos32_frame(frame, 1024, 768, &w, &h)) { fw = w; fh = h; }
+    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; }
     for (int m = 0; m < SCALE_COUNT; m++) {
         char path[MAX_PATH];
         snprintf(path, sizeof path, "%s\\%s.bmp", dir, scale_names[m]);
