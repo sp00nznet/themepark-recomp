@@ -119,3 +119,34 @@ void hold_back_memory(void (*lifted)(void)) {
     lifted();
     if (held) dos32_heap_free(held);
 }
+
+/* The cursor coming apart (issue #6). The mouse set-up (0x46DF44) takes three
+ * 4 KB buffers for the pointer from Bullfrog's pools (0x46E8D0), and it runs
+ * again at every change of resolution (0x400D42: R, and the screens that
+ * switch). The 1994 game took three new ones each time and never gave them
+ * back. GOG's patch meant to take them once: it rewrites the set-up's own
+ * code after the first run to jump past the allocations, and drops the check
+ * for an allocation that failed. A rewrite of code does nothing to the lifted
+ * C, so here every switch took 12 KB more; after about 60 the pool was empty,
+ * the buffers were at address 0, on top of the BIOS data area, and the
+ * pointer drawn from them lost its rows. Do what GOG meant: while the set-up
+ * runs, a buffer it already has (in its own variables, so a loaded save
+ * state keeps working) is given again. */
+#define MEM32(a) (*(uint32_t*)dos32_mem(a))
+extern uint32_t g_esp, g_eax;
+static int mouse_setup_allocs = -1;     /* allocations so far in this run of the set-up; -1 outside */
+static const uint32_t mouse_bufs[3] = { 0x4CE590, 0x4CE564, 0x4CE554 };   /* in the order it takes them */
+
+void mouse_setup(void (*lifted)(void)) {
+    mouse_setup_allocs = 0;
+    lifted();
+    mouse_setup_allocs = -1;
+}
+
+void pool_alloc(void (*lifted)(void)) {   /* 0x46E8D0(bytes) */
+    if (mouse_setup_allocs >= 0 && mouse_setup_allocs < 3 && MEM32(g_esp + 4) == 0x1000) {
+        uint32_t had = MEM32(mouse_bufs[mouse_setup_allocs++]);
+        if (had) { g_eax = had; g_esp += 4; return; }   /* return as its ret would */
+    }
+    lifted();
+}

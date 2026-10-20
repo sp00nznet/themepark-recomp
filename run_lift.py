@@ -63,6 +63,8 @@ OVERRIDES = {
     0x00470BE4: 'pace_retrace',
     # Bullfrog's memory manager grabs all memory: leave the C library some.
     0x00472950: 'hold_back_memory',
+    # The pointer's buffers, taken once and not again at every resolution change (#6).
+    0x0046DF44: 'mouse_setup', 0x0046E8D0: 'pool_alloc',
     # HMI SOS, replaced at its edge (src/runtime/sound.c, docs/sound.md).
     # Detection, system init and shutdown: there is no card to find.
     0x00475793: 'sos_ok', 0x00475950: 'sos_ok', 0x00475F3E: 'sos_ok', 0x004758FC: 'sos_ok',

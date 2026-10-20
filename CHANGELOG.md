@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- The pointer came apart, from the top down, after a long game (#6). Every
+  change of resolution (R, and the screens that switch) ran the mouse
+  set-up, which took three new 4 KB buffers from the game's memory pool and
+  never gave them back; GOG's patch stops that by rewriting the game's own
+  code, which does nothing to the lifted C. After about 60 switches the pool
+  was empty and the pointer was drawn from address 0. The buffers are now
+  taken once, as GOG meant.
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when
   sound was turned off and on: the mixer's play position wrapped at 65536
