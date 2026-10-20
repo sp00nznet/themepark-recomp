@@ -7,19 +7,35 @@
 #   2. copy your copy of Theme Park into game/: an installed copy (GOG's, or
 #      any folder holding GAME/MAIN.EXE), the 1994 CD (mounted), or GOG's offline
 #      installer, which it unpacks with innoextract (nothing is run)
-#   3. fetch the pcrecomp toolkit beside this folder, as ../tools
+#   3. fetch the pcrecomp toolkit beside this folder, as ../pcrecomp
 #   4. lift MAIN.EXE and INTRO.EXE to C (run_lift.py), then build build-linux/themepark
 #   5. leave a launcher here: themepark.sh
 #
 #   ./setup.sh                      # look for the game
 #   ./setup.sh ~/GOG\ Games/Theme\ Park   # the folder, or GOG's setup_theme_park_*.exe
+#   ./setup.sh --yes --game-dir DIR  # as the recomp launcher runs it (it asks nothing either way)
 #
 # Every step is skipped when its result is already there, so running it
 # again carries on from where it stopped.
 set -e
 cd "$(dirname "$0")"
 ROOT=$PWD
-TOOLKIT=${PCRECOMP:-$(cd .. && pwd)/tools}
+GAME_ARG=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --yes) ;;                                  # nothing here asks
+    --game-dir) GAME_ARG=$2; shift ;;
+    *) GAME_ARG=$1 ;;
+  esac
+  shift
+done
+set -- ${GAME_ARG:+"$GAME_ARG"}
+# The toolkit: PCRECOMP, else ../pcrecomp (where the launcher puts it), else
+# ../tools (older setups), else ../pcrecomp is cloned.
+PARENT=$(cd .. && pwd)
+if [ -n "$PCRECOMP" ]; then TOOLKIT=$PCRECOMP
+elif [ ! -d "$PARENT/pcrecomp" ] && [ -d "$PARENT/tools/runtime/dos32" ]; then TOOLKIT=$PARENT/tools
+else TOOLKIT=$PARENT/pcrecomp; fi
 PCRECOMP_URL=https://github.com/sp00nznet/pcrecomp
 
 say()  { printf '%s\n' "$*"; }
@@ -65,7 +81,10 @@ else
   src=
   inst=
   if [ -n "$1" ]; then
-    if [ -d "$1" ]; then src=$(game_in "$1"); else inst=$1; fi
+    if [ -d "$1" ]; then
+      src=$(game_in "$1")
+      [ -n "$src" ] || inst=$(ls "$1"/setup_theme_park_*.exe 2>/dev/null | head -1)   # the folder GOG's installer is in
+    else inst=$1; fi
   else
     for d in "$HOME/GOG Games" "$HOME/Games" "$HOME/games"; do
       [ -d "$d" ] && src=$(game_in "$d") && [ -n "$src" ] && break

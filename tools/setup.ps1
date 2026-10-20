@@ -6,11 +6,19 @@
 # install, GOG's offline installer, or the 1994 CD), lifts MAIN.EXE to C, builds
 # themepark.exe and leaves a shortcut. Each step is skipped when its output
 # already exists (-Force redoes them). Everything it does goes to setup.log.
-param([switch]$Force, [string]$Game = "")
+# -Yes installs what is missing without asking; -Game (or -GameDir) is the
+# game's folder, the CD's drive, GOG's offline installer or the folder it is
+# in. RECOMP_LAUNCHER=1 (the recomp launcher) skips the "Press Enter".
+param([switch]$Force, [switch]$Yes, [Alias('GameDir')][string]$Game = "")
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Toolkit = if ($env:PCRECOMP) { $env:PCRECOMP } else { Join-Path (Split-Path -Parent $Root) 'tools' }
+# The toolkit: PCRECOMP, else ../pcrecomp (where the launcher puts it), else
+# ../tools (older setups), else ../pcrecomp is cloned.
+$Parent = Split-Path -Parent $Root
+$Toolkit = if ($env:PCRECOMP) { $env:PCRECOMP }
+  elseif (-not (Test-Path (Join-Path $Parent 'pcrecomp')) -and (Test-Path (Join-Path $Parent 'tools\runtime\dos32'))) { Join-Path $Parent 'tools' }
+  else { Join-Path $Parent 'pcrecomp' }
 $Log = Join-Path $Root 'setup.log'
 Set-Location $Root
 $Steps = 5
@@ -18,20 +26,21 @@ function Log($t) { try { Add-Content -Path $Log -Value $t -Encoding UTF8 -ErrorA
 Log "==== setup $(Get-Date -Format s)"
 
 function Say($t, $c = 'Gray') { Write-Host $t -ForegroundColor $c; Log $t }
+function Pause-End { if (-not $env:RECOMP_LAUNCHER) { Read-Host "Press Enter to close" | Out-Null } }
 # cmd.exe, which the build runs through, splits a path at '&'.
 if ($Root -match '&') {
   Say "This folder's path has an '&' in it, which the build cannot handle:" 'Red'
   Say "  $Root" 'Red'
   Say "Move the folder somewhere else (for example C:\themepark) and run Setup.cmd from there." 'Yellow'
-  Read-Host "Press Enter to close" | Out-Null; exit 1
+  Pause-End; exit 1
 }
 function Step($n, $t) { Write-Host ""; Say "[$n/$Steps] $t" 'Cyan' }
 function Fail($t) {
   Say "" ; Say "Setup stopped: $t" 'Red'
   Say "The details are in $Log. Fix that and run Setup.cmd again; finished steps are skipped." 'Yellow'
-  Read-Host "Press Enter to close" | Out-Null; exit 1
+  Pause-End; exit 1
 }
-function Ask($q) { $a = Read-Host "$q [Y/n]"; return -not ($a -match '^[nN]') }   # Enter = yes
+function Ask($q) { if ($Yes) { Say "$q yes"; return $true }; $a = Read-Host "$q [Y/n]"; return -not ($a -match '^[nN]') }   # Enter = yes
 function Refresh-Path {
   $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }
@@ -111,7 +120,17 @@ Say "  pcrecomp: $Toolkit"
 # to install rather than installing it.
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = if (Test-Path $vswhere) { (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) } else { $null }
-if (-not $vs) { Fail "Visual Studio 2022 (or its Build Tools) with 'Desktop development with C++' is needed. Install it, then run Setup.cmd again." }
+if (-not $vs) {
+  Say "  Visual Studio 2022 with the C++ tools is not installed."
+  if (-not (Ask "  Install the Visual Studio 2022 Build Tools with the C++ workload now (winget, about 3 GB, asks for admin)?")) {
+    Fail "Visual Studio 2022 (or its Build Tools) with 'Desktop development with C++' is needed. Install it, then run Setup.cmd again."
+  }
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Fail "winget is missing. Install 'App Installer' from the Microsoft Store, or the Visual Studio Build Tools yourself." }
+  Exec @('winget', 'install', '-e', '--id', 'Microsoft.VisualStudio.2022.BuildTools', '--accept-package-agreements', '--accept-source-agreements',
+         '--override', '--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended') | Out-Null
+  $vs = if (Test-Path $vswhere) { (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) } else { $null }
+  if (-not $vs) { Fail "the Visual Studio Build Tools did not install. Install them with 'Desktop development with C++', then run Setup.cmd again." }
+}
 Say "  Visual Studio: $vs"
 if (-not (Test-Path "$env:ProgramFiles\LLVM\bin\clang-cl.exe") -and -not (Test-Path "$vs\VC\Tools\Llvm\x64\bin\clang-cl.exe")) {
   Winget-Install 'clang-cl' 'LLVM.LLVM' '350 MB'
@@ -136,10 +155,18 @@ if ((Is-Install 'game') -and -not $Force) {
   Say "  Already in game\ (skipping)."
 } else {
   $Game = $Game.Trim('"', ' ')
+  # A folder holding GOG's offline installer (the launcher's "Choose folder" on Downloads, say).
+  if ($Game -and -not (Is-Install $Game) -and (Test-Path $Game -PathType Container)) {
+    $inst = Get-ChildItem -Path $Game -Filter 'setup_theme_park_*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($inst) { $Game = $inst.FullName }
+  }
   if (-not $Game) { $Game = Find-GOG; if ($Game) { Say "  Found your GOG install: $Game" } }
   if (-not $Game) {
     $inst = Get-ChildItem -Path $Root, (Join-Path $env:USERPROFILE 'Downloads') -Filter 'setup_theme_park_*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($inst) { $Game = $inst.FullName; Say "  Found GOG's installer: $Game" }
+  }
+  if ($Yes -and -not ((Is-Install $Game) -or ($Game -match '\.exe$' -and (Test-Path $Game)))) {
+    Fail "Theme Park was not found. Give its folder (with GAME\MAIN.EXE), the CD's drive, or GOG's setup_theme_park_*.exe with -Game."
   }
   while (-not ((Is-Install $Game) -or ($Game -match '\.exe$' -and (Test-Path $Game)))) {
     $Game = (Read-Host "  Paste the Theme Park folder (with GAME\MAIN.EXE), the CD's drive (for example D:\; double-click an ISO to mount it), or the path of GOG's setup_theme_park_*.exe").Trim('"', ' ')
@@ -205,4 +232,4 @@ Set-Content -Path $lnk -Encoding ASCII -Value @(
 Say "  $lnk"
 Write-Host ""
 Say "Done. Double-click 'Theme Park (recomp).cmd' to play." 'Green'
-Read-Host "Press Enter to close" | Out-Null
+Pause-End

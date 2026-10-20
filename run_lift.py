@@ -362,6 +362,18 @@ def main_exe(path):
     return bytes(data)
 
 
+INTRO_SHA1 = 'fdb4076efa432ae572be1968a663d2355f9b85c6'   # GOG's and the 1994 CD's: the same file
+
+
+def intro_exe(path):
+    data = open(path, 'rb').read()
+    sha = hashlib.sha1(data).hexdigest()
+    if sha != INTRO_SHA1:
+        sys.exit('run_lift: %s is an INTRO.EXE this lift does not know (SHA-1 %s).\n'
+                 'Please open an issue with that SHA-1.' % (path, sha))
+    return data
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--intro', action='store_true', help='lift INTRO.EXE (the opening film) instead')
@@ -379,7 +391,7 @@ def main():
     args.catalog = args.catalog or os.path.join(_HERE, 'analysis', cat_name)
     args.out = args.out or os.path.join(_HERE, 'src', 'recomp', out)
 
-    le = LEImage(main_exe(args.exe))
+    le = LEImage(intro_exe(args.exe) if args.intro else main_exe(args.exe))
     img, lo, objs, relocs = le.build(LOAD_BASE)
     entry, stack = le.entry(objs), le.stack(objs)
     code_obj = next(o for o in objs if o['flags'] & 0x4)
