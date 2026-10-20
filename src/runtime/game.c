@@ -140,3 +140,53 @@ void hires_mode(void (*lifted)(void)) {
     M32W(0x4CE5C8) = wide_w; M32W(0x4CE5F0) = wide_h;
     M32W(0x4CE5EC) = wide_w; M32W(0x4CE5D8) = wide_h;
 }
+
+/* The park's two back buffers are one resource, *WB_SCREEN (0x4A10FA), of
+ * 0x96000 bytes (size at 0x4A1140): two 640x480 screens. Sized for the chosen
+ * resolution when the game loads it. */
+void resource_load(void (*lifted)(void)) {
+    if (wide_w && M32W(g_esp + 4) == 0x4A10FA) M32W(0x4A1140) = 2u * wide_w * (wide_h + 16);   /* + a 16-row strip of slack */
+    lifted();
+}
+
+/* The game shows a 640x480 screen as five VESA bank copies, unrolled: four of
+ * 64 KB and a fifth of 0xB000 bytes. These take over at the fifth (bank 4 is
+ * selected, edi at the window, esi after the first four banks) and copy or
+ * clear the rest of tp_w x tp_h, switching banks through the game's own call
+ * (0x46E6BC). At 640x480 that is the same 0xB000 bytes. */
+extern uint32_t g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp, g_cur_func;
+void sub_0046E6BC(void);
+
+static void guest_bank(uint32_t bank) {
+    uint32_t r[7] = { g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_ebp }, cur = g_cur_func;
+    g_esp -= 4; M32W(g_esp) = bank;
+    g_esp -= 4; M32W(g_esp) = 0xDEAD0000u;   /* RECOMP_RETADDR: its ret pops this */
+    sub_0046E6BC();
+    g_esp += 4;
+    g_eax = r[0]; g_ecx = r[1]; g_edx = r[2]; g_ebx = r[3]; g_esi = r[4]; g_edi = r[5]; g_ebp = r[6];
+    g_cur_func = cur;
+}
+
+static void bank_tail(int copy) {
+    uint32_t left = (uint32_t)tp_w * (uint32_t)tp_h - 4u * 0x10000u, bank = 4, n = 0;
+    for (;;) {
+        n = left < 0x10000u ? left : 0x10000u;
+        if (copy) { memcpy(dos32_mem(0xA0000), dos32_mem(g_esi), n); g_esi += n; }
+        else memset(dos32_mem(0xA0000), (int)(g_eax & 0xFF), n);
+        left -= n;
+        if (!left) break;
+        guest_bank(++bank);
+    }
+    g_edi = 0xA0000 + n;
+    g_ecx = 0;   /* the rep that follows does nothing */
+}
+void tp_present_tail(void) { bank_tail(1); }
+void tp_clear_tail(void) { bank_tail(0); }
+
+/* The screen update (0x444ED6) copies only the 32x16 cells its dirty grid
+ * marks, and the grid covers 640x480. Wider, take its own whole-screen branch
+ * every time (0x4C6BCD set): one copy of the screen, which costs nothing now. */
+void screen_update(void (*lifted)(void)) {
+    if (wide_w) *dos32_mem(0x4C6BCD) = 1;
+    lifted();
+}
