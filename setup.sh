@@ -5,7 +5,7 @@
 #   1. check the tools (gcc, CMake, Python 3 with capstone and pefile, git,
 #      SDL2), and say which packages to install when one is missing
 #   2. copy your copy of Theme Park into game/: an installed copy (GOG's, or
-#      any folder holding GAME/MAIN.EXE and THEME.CD/DATA), or GOG's offline
+#      any folder holding GAME/MAIN.EXE), the 1994 CD (mounted), or GOG's offline
 #      installer, which it unpacks with innoextract (nothing is run)
 #   3. fetch the pcrecomp toolkit beside this folder, as ../tools
 #   4. lift MAIN.EXE to C (run_lift.py), then build build-linux/themepark
@@ -49,11 +49,12 @@ fi
 say "  ok"
 
 # ---- 2. the game ----------------------------------------------------------------
-# The folder under $1 holding GAME/MAIN.EXE and THEME.CD/DATA, any case.
+# The folder under $1 holding GAME/MAIN.EXE and GAME/DATA, any case: GOG's
+# install, a 1994 install, or the 1994 CD itself (no THEME.CD/ there).
 game_in() {
   find "$1" -ipath '*/GAME/MAIN.EXE' 2>/dev/null | while read -r f; do
     d=$(dirname "$(dirname "$f")")
-    if [ -n "$(find "$d" -maxdepth 2 -ipath "$d/THEME.CD/DATA")" ]; then echo "$d"; break; fi
+    if [ -n "$(find "$d" -maxdepth 2 -ipath "$d/GAME/DATA")" ]; then echo "$d"; break; fi
   done
 }
 
@@ -81,13 +82,33 @@ else
     mkdir -p game
     cp -r "$src"/. game/
   else
-    fail "Theme Park was not found. Run ./setup.sh /the/folder/holding/GAME (or GOG's setup_theme_park_*.exe)."
+    fail "Theme Park was not found. Run ./setup.sh /the/folder/holding/GAME (the mounted CD, or GOG's setup_theme_park_*.exe)."
   fi
-  [ -n "$(game_in game)" ] || fail "game/ has no GAME/MAIN.EXE after copying. Is that the GOG version of Theme Park?"
+  [ -n "$(game_in game)" ] || fail "game/ has no GAME/MAIN.EXE after copying. Is that Theme Park (GOG, or the 1994 CD)?"
+  chmod -R u+w game   # files copied off a CD are read-only
+  # From the CD: do what its installer did, minus the copy of GAME/. These 32
+  # are the files it put in C:\THEME.CD\DATA; the game reads them from there
+  # and nowhere else. GOG's THEME.CD/DATA is the same 32.
+  if [ -z "$(find game -maxdepth 2 -ipath game/THEME.CD/DATA)" ]; then
+    say "  that is the 1994 CD: setting up THEME.CD/ the way its installer did"
+    gd=$(find game -maxdepth 2 -ipath game/GAME/DATA | head -1)
+    mkdir -p game/THEME.CD/DATA
+    for f in HPANEL-0.DAT HPANEL-0.TAB MAWAR0-0.DAT MAWAR1-0.DAT MAWPAL-0.DAT MBLK-0.DAT MBLK-0.TAB \
+             MCUP-0.DAT MCUP-0.TAB MHAND-0.DAT MHAND-0.TAB MMAP-0.DAT MMENU-0.DAT MMENU-1.DAT MNEG-0.DAT \
+             MNGPAL-0.DAT MPALETTE.DAT MPANEL-0.DAT MPANEL-0.TAB MRES-0.DAT MRSPAL-0.DAT MRSSPR-0.DAT \
+             MRSSPR-0.TAB MSHARE-0.DAT MSPR-0.DAT MSPR-0.TAB MSTAP-0.DAT MSTATE-0.DAT MSTOCK-0.DAT \
+             MSTPAL-0.DAT MSTSPR-0.DAT MSTSPR-0.TAB; do
+      cp "$(find "$gd" -maxdepth 1 -iname "$f" | head -1)" game/THEME.CD/DATA/ || fail "the CD has no $f"
+    done
+    cp -r "$(find game -maxdepth 2 -ipath game/GAME/SAVE | head -1)" game/THEME.CD/SAVE
+  fi
   # GOG keeps the sound setup beside its DOSBox config, not in THEME.CD.
   cd_dir=$(find game -maxdepth 1 -iname THEME.CD | head -1)
   snd=$(find game -iname SNDSETUP.INF | head -1)
   if [ -n "$snd" ] && [ -z "$(find "$cd_dir" -maxdepth 1 -iname SNDSETUP.INF)" ]; then cp "$snd" "$cd_dir/SNDSETUP.INF"; fi
+  # The CD has none (its setup program writes it): GOG's settings, which the game's sound start-up needs.
+  [ -n "$(find "$cd_dir" -maxdepth 1 -iname SNDSETUP.INF)" ] ||
+    printf 'SOUNDFX = SB16 220 7 1\r\nMUSIC = GENERAL 330 0 0\r\n' > "$cd_dir/SNDSETUP.INF"
 fi
 main_exe=$(find game -ipath 'game/GAME/MAIN.EXE' | head -1)
 

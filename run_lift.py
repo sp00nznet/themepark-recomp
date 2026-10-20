@@ -19,6 +19,7 @@ the relocated image the host copies into guest memory at start-up.
 """
 import argparse
 import bisect
+import hashlib
 import json
 import os
 import subprocess
@@ -130,6 +131,36 @@ def write_image(path, img, base, entry, stack):
         f.write('};\n')
 
 
+# The MAIN.EXEs this lift knows, by SHA-1. The 1994 CD's (UK release and EA's
+# CD-ROM Classics reissue alike) is GOG's byte for byte but for two fixes GOG
+# made to the mouse code: the handler's early exit at 0x46D87E also clears the
+# flag at 0x4AEC98, and the mouse set-up at 0x46DFFF stops allocating its three
+# 4 KB buffers again every time it runs. Applying them makes the two identical,
+# so every address in src/runtime/ holds for both.
+GOG_SHA1 = '79678febe980b2fafd0aea96e83d4a6633449410'
+CD1994_SHA1 = '3d8354ef2c6f1cb2bd0d66163ea1cbe103b1c373'
+CD1994_TO_GOG = [  # (file offset, 1994 bytes, GOG bytes)
+    (0x99680, '4d', '43'),
+    (0x99DFF, '833d90e50200007409833d64e50200007502eb09833d54e50200007505e9b1000000',
+              'eb0490909090e804000000909090905883e841eb0590909090902ec700e953000090'),
+]
+
+
+def main_exe(path):
+    data = bytearray(open(path, 'rb').read())
+    sha = hashlib.sha1(data).hexdigest()
+    if sha == CD1994_SHA1:
+        print('[*] MAIN.EXE from the 1994 CD: applying GOG\'s two mouse fixes')
+        for off, old, new in CD1994_TO_GOG:
+            assert data[off:off + len(old) // 2] == bytes.fromhex(old)
+            data[off:off + len(new) // 2] = bytes.fromhex(new)
+        sha = hashlib.sha1(data).hexdigest()
+    if sha != GOG_SHA1:
+        sys.exit('run_lift: %s is a MAIN.EXE this lift does not know (SHA-1 %s).\n'
+                 'Known: GOG 1.01 and the 1994 CD. Please open an issue with that SHA-1.' % (path, sha))
+    return bytes(data)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(_HERE, 'game', 'GAME', 'MAIN.EXE'))
@@ -138,7 +169,7 @@ def main():
     ap.add_argument('--split', type=int, default=400)
     args = ap.parse_args()
 
-    le = LEImage(open(args.exe, 'rb').read())
+    le = LEImage(main_exe(args.exe))
     img, lo, objs, relocs = le.build(LOAD_BASE)
     entry, stack = le.entry(objs), le.stack(objs)
     code_obj = next(o for o in objs if o['flags'] & 0x4)

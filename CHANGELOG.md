@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The original 1994 CD works as well as GOG's release (#19). Its MAIN.EXE is
+  GOG's but for two mouse fixes GOG made, which `run_lift.py` now applies, so
+  both lift to the same C. Setup takes the CD's drive or folder and lays out
+  `THEME.CD\` the way the CD's installer did (its 32 files, `SAVE\` and a
+  `SNDSETUP.INF`). A MAIN.EXE the lift does not know now stops it with its
+  SHA-1, instead of building something whose addresses are wrong.
+
 ### Fixed
 - Effects longer than 1.5 s (the bus arriving and leaving, fireworks, the
   screams on rides) repeated their opening for ever and only stopped when

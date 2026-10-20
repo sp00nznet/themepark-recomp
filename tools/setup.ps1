@@ -3,7 +3,7 @@
 # step" is the same thing by hand, command for command.
 #
 # It checks the tools, copies your copy of the game into game\ (from a GOG
-# install, or by unpacking GOG's offline installer), lifts MAIN.EXE to C, builds
+# install, GOG's offline installer, or the 1994 CD), lifts MAIN.EXE to C, builds
 # themepark.exe and leaves a shortcut. Each step is skipped when its output
 # already exists (-Force redoes them). Everything it does goes to setup.log.
 param([switch]$Force, [string]$Game = "")
@@ -62,7 +62,7 @@ function Winget-Install($cmd, $id, $size) {
 
 Clear-Host
 Say "Theme Park - static recompilation setup" 'White'
-Say "You need your own copy of Theme Park from GOG (installed, or GOG's offline installer) and about 2 GB free."
+Say "You need your own copy of Theme Park (GOG's, installed or its offline installer, or the 1994 CD) and about 2 GB free."
 Say "The lift and the build take 10 to 30 minutes, once."
 
 # ---------------------------------------------------------------- tools
@@ -121,7 +121,11 @@ Winget-Install 'ninja' 'Ninja-build.Ninja' '1 MB'
 
 # ---------------------------------------------------------------- the game
 Step 2 "Copying your copy of Theme Park into game\"
-function Is-Install([string]$d) { return ($d -and (Test-Path (Join-Path $d 'GAME\MAIN.EXE')) -and (Test-Path (Join-Path $d 'THEME.CD\DATA'))) }
+# GOG's install, a 1994 install, or the 1994 CD itself (GAME\ and CONFIG\, no THEME.CD\).
+function Is-Install([string]$d) { return ($d -and (Test-Path (Join-Path $d 'GAME\MAIN.EXE')) -and (Test-Path (Join-Path $d 'GAME\DATA'))) }
+# The files the 1994 installer copies from the CD into C:\THEME.CD\DATA; the
+# game reads these from there and nowhere else. GOG's THEME.CD\DATA is the same 32.
+$HdFiles = 'HPANEL-0.DAT HPANEL-0.TAB MAWAR0-0.DAT MAWAR1-0.DAT MAWPAL-0.DAT MBLK-0.DAT MBLK-0.TAB MCUP-0.DAT MCUP-0.TAB MHAND-0.DAT MHAND-0.TAB MMAP-0.DAT MMENU-0.DAT MMENU-1.DAT MNEG-0.DAT MNGPAL-0.DAT MPALETTE.DAT MPANEL-0.DAT MPANEL-0.TAB MRES-0.DAT MRSPAL-0.DAT MRSSPR-0.DAT MRSSPR-0.TAB MSHARE-0.DAT MSPR-0.DAT MSPR-0.TAB MSTAP-0.DAT MSTATE-0.DAT MSTOCK-0.DAT MSTPAL-0.DAT MSTSPR-0.DAT MSTSPR-0.TAB' -split ' '
 function Find-GOG {
   foreach ($k in 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games\1207660423', 'HKLM:\SOFTWARE\GOG.com\Games\1207660423') {
     try { $d = (Get-ItemProperty $k -ErrorAction Stop).path; if (Is-Install $d) { return $d.TrimEnd('\') } } catch {}
@@ -138,7 +142,7 @@ if ((Is-Install 'game') -and -not $Force) {
     if ($inst) { $Game = $inst.FullName; Say "  Found GOG's installer: $Game" }
   }
   while (-not ((Is-Install $Game) -or ($Game -match '\.exe$' -and (Test-Path $Game)))) {
-    $Game = (Read-Host "  Paste the Theme Park folder (with GAME\MAIN.EXE), or the path of GOG's setup_theme_park_*.exe").Trim('"', ' ')
+    $Game = (Read-Host "  Paste the Theme Park folder (with GAME\MAIN.EXE), the CD's drive (for example D:\; double-click an ISO to mount it), or the path of GOG's setup_theme_park_*.exe").Trim('"', ' ')
   }
   if ($Game -match '\.exe$') {
     Winget-Install 'innoextract' 'dscharrer.innoextract' '5 MB'
@@ -148,10 +152,22 @@ if ((Is-Install 'game') -and -not $Force) {
     $code = Exec @('robocopy', $Game, (Join-Path $Root 'game'), '/E', '/NFL', '/NDL', '/NJH', '/NP', '/XD', $Root)
     if ($code -ge 8) { Fail "copying the game failed (robocopy exit code $code)." }
   }
-  if (-not (Is-Install 'game')) { Fail "game\ has no GAME\MAIN.EXE after copying. Is that the GOG version of Theme Park?" }
+  if (-not (Is-Install 'game')) { Fail "game\ has no GAME\MAIN.EXE after copying. Is that Theme Park (GOG, or the 1994 CD)?" }
+  Exec @('attrib', '-R', (Join-Path $Root 'game\*'), '/S', '/D') | Out-Null   # files copied off a CD are read-only
+  # From the CD: do what its installer did, minus the copy of GAME\.
+  if (-not (Test-Path 'game\THEME.CD\DATA')) {
+    Say "  That is the 1994 CD: setting up THEME.CD\ the way its installer did."
+    New-Item -ItemType Directory -Force 'game\THEME.CD\DATA' | Out-Null
+    foreach ($f in $HdFiles) { Copy-Item (Join-Path 'game\GAME\DATA' $f) 'game\THEME.CD\DATA\' }
+    Copy-Item -Recurse 'game\GAME\SAVE' 'game\THEME.CD\SAVE'
+  }
   # GOG keeps the sound setup beside its DOSBox config, not in THEME.CD.
   $snd = Get-ChildItem -Path 'game' -Recurse -Filter 'SNDSETUP.INF' -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($snd -and -not (Test-Path 'game\THEME.CD\SNDSETUP.INF')) { Copy-Item $snd.FullName 'game\THEME.CD\SNDSETUP.INF' }
+  # The CD has none (its setup program writes it): GOG's settings, which the game's sound start-up needs.
+  if (-not (Test-Path 'game\THEME.CD\SNDSETUP.INF')) {
+    Set-Content -Path 'game\THEME.CD\SNDSETUP.INF' -Encoding ASCII -Value @('SOUNDFX = SB16 220 7 1', 'MUSIC = GENERAL 330 0 0')
+  }
 }
 
 # ---------------------------------------------------------------- lift

@@ -3,7 +3,7 @@
 A static recompilation of Bullfrog's **Theme Park** (DOS, 1994) to a native
 Windows and Linux program. The game's own 32-bit code is translated to C by
 [pcrecomp](https://github.com/sp00nznet/pcrecomp) and runs on its DOS/4GW host;
-no emulator and no DOSBox. You supply your own copy (the GOG release); nothing
+no emulator and no DOSBox. You supply your own copy (GOG's, or the 1994 CD); nothing
 from the game is in this repository.
 
 Part of the [pcrecomp](https://github.com/sp00nznet/pcrecomp) family, and built
@@ -44,7 +44,7 @@ What this adds to the 1994 DOS game, beyond running it natively:
 - **Native on Linux.** The same lifted C built with gcc and SDL2: every
   feature above, no Wine and no DOSBox. A scripted run leaves the game's memory
   identical byte for byte to the Windows build's (pcrecomp#84).
-- **One-click setup** from your GOG install or GOG's offline installer
+- **One-click setup** from your GOG install, GOG's offline installer or the 1994 CD
   (`Setup.cmd` on Windows, `./setup.sh` on Linux).
 - **Headless runs** for testing: scripted input, `--record` to video with
   sound, save and load on cue, and a conformance check.
@@ -90,9 +90,14 @@ Real output of the recompiled game.
 
 ## Getting Started
 
-You need Windows 10 or 11 (x64), or Linux (below), and Theme Park from GOG: either installed
-through GOG Galaxy, or GOG's offline installer
-(`setup_theme_park_1.01_cs_(77027).exe`).
+You need Windows 10 or 11 (x64), or Linux (below), and Theme Park: from GOG, either installed
+through GOG Galaxy or GOG's offline installer
+(`setup_theme_park_1.01_cs_(77027).exe`), or the original 1994 CD (the UK
+release or EA's CD-ROM Classics reissue; mount an ISO by double-clicking it).
+The CD's MAIN.EXE is GOG's except for two small mouse fixes GOG made, which
+`run_lift.py` applies, so both build the same program. Other versions (EA's
+store copy, other languages' discs) are untested: `run_lift.py` stops and
+prints the file's SHA-1, and an issue with that is welcome.
 
 ### Quick start
 
@@ -103,7 +108,8 @@ through GOG Galaxy, or GOG's offline installer
      toolkit, Visual Studio 2022 with C++, LLVM (clang-cl), CMake and Ninja, and
      asks before installing anything missing.
    - It finds your GOG install (or the GOG installer in this folder or your
-     Downloads) and asks for the path if it can't.
+     Downloads) and asks for the path if it can't. For the CD, give it the
+     drive (`D:\`); it sets up `THEME.CD\` the way the CD's installer did.
    - It lifts the game to C (a few minutes), then builds it (5 to 20 minutes).
    - If a step fails it says what to do in one sentence; the details are in
      `setup.log`. Run it again and finished steps are skipped.
@@ -130,7 +136,12 @@ The Quick start runs exactly these commands.
    ```
    innoextract -s -d game "setup_theme_park_1.01_cs_(77027).exe"
    ```
-   or copy your GOG install folder to `game\`.
+   or copy your GOG install folder to `game\`. From the CD, copy the whole
+   disc to `game\`, clear the read-only flag (`attrib -R game\* /S /D`), then
+   make `game\THEME.CD\` as its installer did: `DATA\` holding the 32 files
+   listed in `tools\setup.ps1` (`$HdFiles`) copied from `GAME\DATA`, a copy of
+   `GAME\SAVE`, and a `SNDSETUP.INF` reading `SOUNDFX = SB16 220 7 1` and
+   `MUSIC = GENERAL 330 0 0`.
 4. Lift:
    ```
    py -3 run_lift.py
@@ -159,7 +170,7 @@ distribution should do.
    sudo apt install gcc cmake python3 python3-pip git pkg-config libsdl2-dev libasound2-dev innoextract
    ```
 2. `./setup.sh`, or `./setup.sh /path/to/the/game` (the folder holding
-   `GAME/MAIN.EXE`, or GOG's `setup_theme_park_*.exe`). It does what
+   `GAME/MAIN.EXE`, the mounted 1994 CD, or GOG's `setup_theme_park_*.exe`). It does what
    `Setup.cmd` does: fetches pcrecomp beside this folder as `../tools`, copies
    the game into `game/`, lifts (pip installs `capstone` and `pefile` for your
    user if they are missing), builds `build-linux/themepark` and leaves
