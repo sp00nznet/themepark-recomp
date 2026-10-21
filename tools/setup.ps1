@@ -215,19 +215,13 @@ if ((Is-Install 'game') -and -not $Force) {
 
 # ---------------------------------------------------------------- lift
 Step 3 "Lifting MAIN.EXE and INTRO.EXE to C (finding the functions takes a few minutes, once)"
-if ((Test-Path 'src\recomp\gen\recomp_dispatch.c') -and -not $Force) { Say "  Already done (skipping)." }
-else {
-  if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\d32_funcs.json' }
-  $env:PCRECOMP = $Toolkit
-  Run "Lifting" ($pyargs + @('run_lift.py'))
-}
-# The opening film: a second, smaller lift.
-if ((Test-Path 'src\recomp\gen_intro\recomp_dispatch.c') -and -not $Force) { Say "  The intro: already done (skipping)." }
-else {
-  if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\intro_funcs.json' }
-  $env:PCRECOMP = $Toolkit
-  Run "Lifting the intro" ($pyargs + @('run_lift.py', '--intro'))
-}
+# Every time: lifted C from an older run_lift.py would not match this code, and the game
+# crashed (#37). The slow part, finding the functions, is kept in analysis\, so a lift
+# again takes seconds. -Force finds them again too.
+if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\d32_funcs.json', 'analysis\intro_funcs.json' }
+$env:PCRECOMP = $Toolkit
+Run "Lifting" ($pyargs + @('run_lift.py'))
+Run "Lifting the intro" ($pyargs + @('run_lift.py', '--intro'))   # the opening film: a second, smaller lift
 
 # ---------------------------------------------------------------- build
 Step 4 "Building build\themepark.exe (5 to 20 minutes)"
