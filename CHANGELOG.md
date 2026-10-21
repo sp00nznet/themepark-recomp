@@ -24,7 +24,7 @@ versions follow [SemVer](https://semver.org/).
 - Setup builds every time (#37, #10): run again after an update, it kept the
   old lifted C and the old exe, so updates never reached the game.
 - The installer no longer vanishes on an error (#33): it shows what went
-  wrong and keeps a log in `%APPDATA%ecomp-launcher\launcher.log`.
+  wrong and keeps a log in `%APPDATA%\recomp-launcher\launcher.log`.
 - Wider parks (#11): the stock market, research, the bank and the game's
   other full screens were sheared across the screen; they draw 640 wide at
   the left again. The interface no longer turns red: the game's bank switch
