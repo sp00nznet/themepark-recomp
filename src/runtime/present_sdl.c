@@ -319,7 +319,7 @@ static void relaunch(const char* a1, const char* a2, const char* a3) {
     ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
     if (n <= 0) return;
     exe[n] = 0;
-    char* argv[] = { exe, (char*)a1, (char*)a2, (char*)a3, NULL };
+    char* argv[] = { exe, "--nointro", (char*)a1, (char*)a2, (char*)a3, NULL };   /* seen once already (#37) */
     execv(exe, argv);
 }
 

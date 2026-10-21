@@ -72,6 +72,7 @@ OVERRIDES = {
     # Custom resolutions (#11): the 640x480 mode set and the VESA call under it.
     0x0046ECF0: 'hires_mode', 0x0046EC50: 'lores_mode', 0x0046E658: 'vesa_set',
     0x0044F63F: 'resource_load', 0x00444ED6: 'screen_update', 0x0043DFAC: 'park_zones',
+    0x00445EFA: 'double_screen',   # the game's own screens, wider (#11)
     # HMI SOS, replaced at its edge (src/runtime/sound.c, docs/sound.md).
     # Detection, system init and shutdown: there is no card to find.
     0x00475793: 'sos_ok', 0x00475950: 'sos_ok', 0x00475F3E: 'sos_ok', 0x004758FC: 'sos_ok',
@@ -258,6 +259,9 @@ SCREEN_SITES.update({
     0x00470FC9: ('0xFFFFF104u', '4 - 6 * tp_w'),
     0x004715C5: ('0xA0u', 'tp_w / 4'),
     0x00471CC2: ('0xA0u', 'tp_w / 4'),
+    # The bank switch turns colour 0 red past bank 5, a debug check; a wide
+    # screen has more banks (#11: the red tinge). 1920x480 ends in bank 14.
+    0x0046E6D1: ('(5)', '(tp_w == 640 ? 5 : 15)'),
 })
 SCREEN_SITES.update({
     0x004023C0: ('ecx = 0x2C00u;', '@tp_present_tail'),

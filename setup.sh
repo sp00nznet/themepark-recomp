@@ -156,15 +156,11 @@ export PCRECOMP=$TOOLKIT
 
 # ---- 4. lift + build ------------------------------------------------------------
 step "[4/5] Lifting MAIN.EXE to C, then building (the first lift finds the functions: a few minutes)"
-if [ -f src/recomp/gen/image_data.c ]; then
-  say "  already lifted (src/recomp/gen)"
-else
-  python3 run_lift.py --exe "$main_exe" || fail "the lift failed."
-fi
-if [ ! -f src/recomp/gen_intro/image_data.c ]; then   # the opening film
-  intro_exe=$(find "$(dirname "$main_exe")" -maxdepth 1 -iname intro.exe | head -n 1)
-  [ -n "$intro_exe" ] && { python3 run_lift.py --intro --exe "$intro_exe" || fail "the intro's lift failed."; }
-fi
+# Every time: lifted C from an older run_lift.py would not match this code (#37). The slow part,
+# finding the functions, is kept in analysis/, so a lift again takes seconds.
+python3 run_lift.py --exe "$main_exe" || fail "the lift failed."
+intro_exe=$(find "$(dirname "$main_exe")" -maxdepth 1 -iname intro.exe | head -n 1)   # the opening film
+[ -n "$intro_exe" ] && { python3 run_lift.py --intro --exe "$intro_exe" || fail "the intro's lift failed."; }
 cmake -B build-linux -DCMAKE_BUILD_TYPE=Release "-DPCRECOMP=$TOOLKIT" >/dev/null || fail "CMake could not configure the build."
 cmake --build build-linux -j "$(nproc)" || fail "the build failed."
 [ -x build-linux/themepark ] || fail "the build finished but build-linux/themepark is missing."

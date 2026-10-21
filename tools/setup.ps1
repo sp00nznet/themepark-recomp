@@ -4,8 +4,8 @@
 #
 # It checks the tools, copies your copy of the game into game\ (from a GOG
 # install, GOG's offline installer, or the 1994 CD), lifts MAIN.EXE to C, builds
-# themepark.exe and leaves a shortcut. Each step is skipped when its output
-# already exists (-Force redoes them). Everything it does goes to setup.log.
+# themepark.exe and leaves a shortcut. The tool and game steps are skipped when
+# already done (-Force redoes them); the lift and build always run. Everything it does goes to setup.log.
 # -Yes installs what is missing without asking; -Game (or -GameDir) is the
 # game's folder, the CD's drive, GOG's offline installer or the folder it is
 # in. RECOMP_LAUNCHER=1 (the recomp launcher) skips the "Press Enter".
@@ -112,7 +112,10 @@ if (-not (Test-Path (Join-Path $Toolkit 'tools\lift\lift32.py'))) {
   Run "Cloning pcrecomp" @('git', 'clone', '--depth', '1', 'https://github.com/sp00nznet/pcrecomp', $Toolkit)
 }
 # The newest toolkit feature the game uses (pcrecomp#123); CMakeLists.txt checks the same.
-function Toolkit-Current($t) { Select-String -Quiet -Path (Join-Path $t 'runtime\dos32\dos32.h') -Pattern 'dos32_vesa_custom' -ErrorAction SilentlyContinue }
+function Toolkit-Current($t) {
+  $h = Join-Path $t 'runtime\dos32\dos32.h'   # missing in a toolkit from before dos32
+  (Test-Path $h) -and (Select-String -Quiet -Path $h -Pattern 'dos32_vesa_custom')
+}
 if (-not (Toolkit-Current $Toolkit)) {
   $Fresh = Join-Path $Parent 'pcrecomp'
   if ($env:PCRECOMP) { Fail "your pcrecomp at $Toolkit (PCRECOMP) is older than this game needs. Update it: git -C `"$Toolkit`" pull" }
@@ -215,27 +218,20 @@ if ((Is-Install 'game') -and -not $Force) {
 
 # ---------------------------------------------------------------- lift
 Step 3 "Lifting MAIN.EXE and INTRO.EXE to C (finding the functions takes a few minutes, once)"
-if ((Test-Path 'src\recomp\gen\recomp_dispatch.c') -and -not $Force) { Say "  Already done (skipping)." }
-else {
-  if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\d32_funcs.json' }
-  $env:PCRECOMP = $Toolkit
-  Run "Lifting" ($pyargs + @('run_lift.py'))
-}
-# The opening film: a second, smaller lift.
-if ((Test-Path 'src\recomp\gen_intro\recomp_dispatch.c') -and -not $Force) { Say "  The intro: already done (skipping)." }
-else {
-  if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\intro_funcs.json' }
-  $env:PCRECOMP = $Toolkit
-  Run "Lifting the intro" ($pyargs + @('run_lift.py', '--intro'))
-}
+# Every time: lifted C from an older run_lift.py would not match this code, and the game
+# crashed (#37). The slow part, finding the functions, is kept in analysis\, so a lift
+# again takes seconds. -Force finds them again too.
+if ($Force) { Remove-Item -Force -ErrorAction SilentlyContinue 'analysis\d32_funcs.json', 'analysis\intro_funcs.json' }
+$env:PCRECOMP = $Toolkit
+Run "Lifting" ($pyargs + @('run_lift.py'))
+Run "Lifting the intro" ($pyargs + @('run_lift.py', '--intro'))   # the opening film: a second, smaller lift
 
 # ---------------------------------------------------------------- build
-Step 4 "Building build\themepark.exe (5 to 20 minutes)"
-if ((Test-Path 'build\themepark.exe') -and -not $Force) { Say "  Already done (skipping)." }
-else {
-  $env:PCRECOMP = $Toolkit
-  Run "Compiling" @('cmd', '/c', ('call "' + (Join-Path $Root 'build.cmd') + '"'))
-}
+# Always: the lift above rewrote the C, and an old exe would be the old game
+# (#37). Ninja only recompiles what changed, so a rebuild is quick.
+Step 4 "Building build\themepark.exe (5 to 20 minutes the first time)"
+$env:PCRECOMP = $Toolkit
+Run "Compiling" @('cmd', '/c', ('call "' + (Join-Path $Root 'build.cmd') + '"'))
 
 # ---------------------------------------------------------------- shortcut
 Step 5 "Making the shortcut"
