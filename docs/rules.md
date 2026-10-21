@@ -19,6 +19,7 @@ advisor=1
 entertainers=1
 handymen=1
 building=1
+lights=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -169,11 +170,34 @@ the ground, not raised, and take nothing under them.
 
 ![A fountain in the square by the gate](screenshots/fountain-rule.png)
 
+### Lamps light up in the dark (`lights`, issue #18)
+
+**In 1994:** rain and thunderstorms darken the whole park (the game fades
+its palette), and nothing lights up.
+
+**With the rule:** lamp posts glow while it is dark, more the darker it
+gets, and go out when the weather clears. Only the picture changes: the glow
+is added to each frame as it goes to the screen, so the simulation, network
+games and save states never see it. Lamps hidden behind something still
+glow through it.
+
+![Lamps in a thunderstorm, without and with the rule](screenshots/lights-rule.png)
+
+There is no night in the game, only weather; each day passes in under a
+second, too fast for a day and night clock.
+
 ## Asked for, and not possible
 
 - **Turning shops and sideshows** (issue #20): the game has one drawing of
   each shop and sideshow, facing one way; only ride entrances and the toilets
-  are drawn four ways. Turning them needs new art.
+  are drawn four ways. Mirroring the drawing (flipping it left to right) does
+  not work either: the view is not a symmetric diamond. Rows of tiles run
+  straight across the screen and each row further down is shifted right, so
+  every receding edge leans the same way, and a mirrored shop leans the other
+  way, off the grid. It would still face the viewer, too. Here the arcade,
+  as drawn and mirrored: its base no longer follows the hedge beside it.
+
+  ![The arcade, and mirrored](screenshots/mirrored-shop.png)
 
 ## How they work
 

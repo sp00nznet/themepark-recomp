@@ -192,7 +192,9 @@ static void speed_step(int up) {
 static void render(void) {
     pad_poll(fw, fh, speed_step);
     int w, h;
-    if (dos32_frame(frame, 1920, 1080, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
+    int got = dos32_frame(frame, 1920, 1080, &w, &h);
+    if (got && (w != fw || h != fh)) { fw = w; fh = h; layout(); }
+    if (got) lights_apply(frame, w, h);
     set_title();
     if (g_present.gdi || !d3d_present(wnd, frame, fw, fh, &dst, cw, ch, g_present.scale, g_present.look,
                                       g_present.vsync)) {
@@ -616,7 +618,7 @@ int present_test(const char* dir) {
     wnd = CreateWindowA("tp_test", "", WS_POPUP, 0, 0, 1440, 1080, NULL, NULL, wc.hInstance, NULL);
     cw = 1440; ch = 1080;
     int w, h, bad = 0;
-    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; }
+    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; lights_apply(frame, w, h); }
     for (int m = 0; m < SCALE_COUNT; m++) {
         char path[MAX_PATH];
         snprintf(path, sizeof path, "%s\\%s.bmp", dir, scale_names[m]);

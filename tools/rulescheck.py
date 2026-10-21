@@ -11,7 +11,8 @@ then runs headless with the rule off and on:
   guards   (2) a guard dropped elsewhere mid-escort: is her thug let go
   entertainers  the panel's counts after 5 minutes
   handymen a handyman dropped on a ride's footprint: does he find a path
-  building fences under the coaster, lamps on a path
+  building fences under the coaster, lamps and a fountain on a path
+  lights   the demo park in a storm: do the lamps glow
 Needs game/ (setup) and a build. Takes a few minutes.
 """
 import argparse
@@ -145,6 +146,25 @@ def building(exe):
     return ok
 
 
+def lights(exe):
+    # A storm comes at 586.5 s (in 640x480, with these inputs); the demo park has lamps.
+    import tempfile
+    sums = {}
+    for rules in ('none', 'lights'):
+        d = tempfile.mkdtemp()
+        e = dict(os.environ)
+        keys = sum((['--key', '%.2f:50' % (51 + i * 0.15)] for i in range(1, 33)), [])      # the camera down
+        keys += sum((['--key', '%.2f:4b' % (51.07 + i * 0.15)] for i in range(1, 13)), [])  # and left
+        lamps = ['--poke', '55:4c6646=02', '--poke', '55:4c6647=00', '--call', '55.6:430da6:b9f',
+                 '--call', '55.7:430da6:ba1', '--call', '55.8:430da6:ba3']
+        subprocess.run([exe, '--headless', '--mute', '--nointro', '--seconds', '588', '--rules', rules + ',building'] +
+                       DEMO + keys + lamps + ['--present-test', d], cwd=HERE, capture_output=True, env=e, timeout=1800)
+        b = open(os.path.join(d, 'nearest.bmp'), 'rb').read()
+        sums[rules] = sum(b[54:])
+    return check(sums['lights'] > sums['none'] * 1.01, 'lights: lamps glow in the storm (+%.1f%% light)' %
+                 (100.0 * sums['lights'] / max(1, sums['none']) - 100))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -154,7 +174,8 @@ def main():
     if not os.path.exists(os.path.join(HERE, 'game', 'THEME.CD', 'SAVE', 'DEMO.GY')) or not os.path.exists(exe):
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
-    ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe)])
+    ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
+              lights(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

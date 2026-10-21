@@ -106,6 +106,7 @@ void pace_present(void (*lifted)(void)) {
     }
     else if (!polled) pace_wait();
     polled = 0;
+    lights_shown(0);
     lifted();
 }
 
@@ -119,6 +120,7 @@ void pace_present(void (*lifted)(void)) {
  * plain 70 Hz wait. */
 void pace_retrace(void (*lifted)(void)) {
     if (g_cur_func >= 0x00434EA5u && g_cur_func < 0x00436F27u) {
+        lights_shown(1);
         if (!polled) pace_wait();
         polled = 0;
     }

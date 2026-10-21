@@ -171,6 +171,7 @@ static void on_retrace(void) {
     if (!rec || (tick++ & 1)) return;
     int w, h;
     if (!dos32_frame(rec_buf, 1920, 1080, &w, &h)) { w = rec_w ? rec_w : 320; h = rec_h ? rec_h : 200; memset(rec_buf, 0, sizeof rec_buf); }
+    else lights_apply(rec_buf, w, h);
     if (!rec_w) { rec_w = w; rec_h = h; }
     if (w != rec_w || h != rec_h) {   /* one size per file: scale nearest into the first */
         static uint32_t tmp[1920 * 1080];

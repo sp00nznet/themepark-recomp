@@ -578,7 +578,9 @@ void present_run(void) {
         pad_poll(fw, fh, speed_step);
         int w, h, ow, oh;
         SDL_GetRendererOutputSize(ren, &ow, &oh);
-        if (dos32_frame(frame, 1920, 1080, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+        int got = dos32_frame(frame, 1920, 1080, &w, &h);
+        if (got && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+        if (got) lights_apply(frame, w, h);
         if (ow != cw || oh != ch) { cw = ow; ch = oh; layout(); }
         set_title();
         draw(ren, g_present.scale, g_present.look);
@@ -599,7 +601,7 @@ void present_close(void) {
  * 1440x1080, SDL's software renderer into DIR/<mode>.bmp, no window. */
 int present_test(const char* dir) {
     int w, h, bad = 0;
-    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; }
+    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; lights_apply(frame, w, h); }
     cw = 1440; ch = 1080;
     for (int m = 0; m < SCALE_COUNT; m++) {
         char path[MAX_PATH];

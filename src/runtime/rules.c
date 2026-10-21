@@ -43,6 +43,7 @@
 #define TILES      0x4C3B08   /* 64x64 tiles of 4 bytes: +0 w first person on it, +2 b type */
 #define TILE_FLAGS 0x4A44D9   /* per tile type, 4 bytes: +0 w flags */
 #define TICKS      0x4C3AF8   /* the simulation's tick count */
+extern int32_t tp_vh;          /* game.c: the park view's height in 640x480 */
 
 static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a);
 
@@ -65,6 +66,8 @@ const rule_t rule_list[] = {
     { RULE_BUILD, "building", "More room to build",
       "Hedges, walls and fences go under raised track, lamp posts and fountains go on paths, and track still builds in a full park "
       "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
+    { RULE_LIGHTS, "lights", "Lamps light up in the dark",
+      "When rain and storms darken the park, lamp posts glow; the darker, the brighter. Only the picture changes (#18)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -692,6 +695,87 @@ void advisor(void (*lifted)(void)) {
         rlog("advisor (game): %.150s", (const char*)dos32_mem(ADVICE_TEXT));
 }
 
+/* ---- lights (#18) ------------------------------------------------------- */
+/* In rain and storms the game darkens the whole palette (0x437D38(dst, src,
+ * amount): every colour times (256 - amount)/256), and nothing lights up.
+ * With the rule, lamp posts glow, more the darker it is. A lamp is a tile
+ * whose chain ends in -3 (feature 2); the view puts tile (x, y) at
+ * col = x - [0x4C667A], row = y - [0x4C6666],
+ *   screen x = s * (col*W + row*W/3 + [0x4C6624]),  screen y = s * row*H,
+ * W [0x4C663A] and H [0x4C6654] (24 and 16 in 640x480; 48 and 32 in 320x200,
+ * where s is 1/2). The globe is 20 right and 19 up of that. Only the picture
+ * changes: the simulation never sees it. */
+#define LAMP_TAIL   -3
+#define MAX_LIGHTS  256
+#define GLOW_R      22             /* pixels */
+
+static struct { volatile uint32_t seq; int n, dark, view_h; int16_t x[MAX_LIGHTS], y[MAX_LIGHTS]; } lights;
+static int darkness;              /* the game's own: 0 bright .. 255 */
+
+static int park_drawn;            /* the park view was drawn since the last frame (0x40B837) */
+static int park_since;            /* ... and since the last frame shown */
+static volatile int lights_valid;  /* the frame on the screen is the park's */
+
+void park_view(void (*lifted)(void)) { park_drawn = park_since = 1; lifted(); }
+
+/* game.c: the game shows a frame (its presents), or another screen draws its
+ * own (the negotiations): the lights belong to a frame with the park in it. */
+void lights_shown(int other) { lights_valid = !other && park_since; park_since = 0; }
+
+void palette_dim(void (*lifted)(void)) {   /* 0x437D38(dst, src, amount) */
+    darkness = (int)(M32(g_esp + 12) & 0xFF);
+    lifted();
+}
+
+static void lights_frame(void) {
+    int on = (tp_rules & RULE_LIGHTS) && park_drawn && M8(0x4A14CC) && darkness > 0;   /* not on other screens */
+    park_drawn = 0;
+    if (!M8(0x4A14CC)) darkness = 0;   /* the weather is over: the game put the palette back */
+    int n = 0;
+    if (on) {
+        int W = (int16_t)M16(0x4C663A), H = (int16_t)M16(0x4C6654), off = (int16_t)M16(0x4C6624);
+        int cx = (int16_t)M16(0x4C667A), cy = (int16_t)M16(0x4C6666);
+        if (W <= 0 || H <= 0) on = 0;
+        for (int t = 0; on && t < 4096 && n < MAX_LIGHTS; t++) {
+            if (chain_tail(t, 0) != LAMP_TAIL) continue;
+            int col = t % 64 - cx, row = t / 64 - cy;
+            int sx = (col * W + row * W / 3 + off) * 24 / W + 20, sy = row * H * 24 / W - 19;
+            if (sx < -GLOW_R || sx > 1920 + GLOW_R || sy < -GLOW_R || sy > 1080) continue;
+            lights.x[n] = (int16_t)sx; lights.y[n] = (int16_t)sy; n++;
+        }
+        lights.view_h = W == 48 ? 176 : tp_vh;   /* above the panel */
+    }
+    lights.dark = on ? darkness : 0;
+    lights.n = n;
+    lights.seq++;
+}
+
+/* The presenters, on each new frame (XRGB, w x h): a warm glow round each
+ * lamp, added to the darkened picture. */
+void lights_apply(uint32_t* px, int w, int h) {
+    int dark = lights.dark, n = lights.n, vh = lights.view_h < h ? lights.view_h : h;
+    if (dark <= 0 || n <= 0 || !lights_valid) return;   /* another screen: a report, a negotiation */
+    dark = dark * 3 > 255 ? 255 : dark * 3;             /* storms darken by a third or so: full glow by then */
+    static const int glow[3] = { 255, 214, 140 };   /* lamplight */
+    for (int i = 0; i < n && i < MAX_LIGHTS; i++) {
+        int cx = lights.x[i], cy = lights.y[i];
+        for (int y = cy - GLOW_R; y <= cy + GLOW_R; y++) {
+            if (y < 0 || y >= vh) continue;
+            for (int x = cx - GLOW_R; x <= cx + GLOW_R; x++) {
+                if (x < 0 || x >= w) continue;
+                int d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy) * 2;   /* a little flatter than round */
+                if (d2 >= GLOW_R * GLOW_R) continue;
+                int f = GLOW_R * GLOW_R - d2;                              /* 0 .. R^2 */
+                int a = f * f / (GLOW_R * GLOW_R) * dark / 255 * 200 / (GLOW_R * GLOW_R);   /* 0..200 */
+                uint32_t c = px[y * w + x];
+                int r = (int)(c >> 16 & 255) + glow[0] * a / 255, g = (int)(c >> 8 & 255) + glow[1] * a / 255,
+                    b = (int)(c & 255) + glow[2] * a / 255;
+                px[y * w + x] = (uint32_t)((r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (b > 255 ? 255 : b));
+            }
+        }
+    }
+}
+
 /* ---- tests -------------------------------------------------------------- */
 /* --call T:ADDR[:A1[:A2[:A3]]] (main.c): a game function, called between
  * frames as its own callers would. For tests: hire staff (0x422232 TILE JOB),
@@ -728,6 +812,7 @@ static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a) {
 }
 
 void rules_frame(void) {   /* game.c, between frames on the game thread */
+    lights_frame();
     for (int i = 0; i < ncalls; i++) {
         uint32_t r = guest_call(calls[i].addr, (int)calls[i].n, calls[i].a);
         fprintf(stderr, "[rules] call %08x -> %08x\n", calls[i].addr, r);
