@@ -19,6 +19,7 @@ SKIPs, like conformance.py, without game data or a build.
 
     py -3 tools/mpcheck.py [--players 4] [--rejoin] [--exe build/themepark.exe]
 """
+import re
 import argparse
 import os
 import shutil
@@ -72,7 +73,8 @@ def normal(a, tmp):
     procs = []
     for k in range(n):
         net = ['--host', str(n), '--port', str(a.port)] if k == 0 else ['--join', '127.0.0.1:%d' % a.port]
-        args = ['--seconds', '70'] + net + SCRIPT + ['--dump', '45.5:%s/gate%d.bin' % (tmp, k),
+        rules = ['--rules', a.rules if k == 0 else 'none'] if a.rules else []   # the joiners get the host's
+        args = ['--seconds', '70'] + net + rules + SCRIPT + ['--dump', '45.5:%s/gate%d.bin' % (tmp, k),
                                                      '--dump', '69:%s/end%d.bin' % (tmp, k)]
         if k == 0:
             args += ['--share', '46:2', '--give', '50:2:5000', '--grant', '52:2:20000',
@@ -86,6 +88,10 @@ def normal(a, tmp):
         ok &= check('player %d of %d' % (k + 1, n) in e, 'player %d connected' % (k + 1))
     if not ok:
         return False
+    if a.rules:
+        host = re.search(r'modern rules (\S+)', errs[0])
+        ok &= check(bool(host) and all('modern rules %s (the host' % host[1] in e for e in errs[1:]),
+                    "joiners play by the host's rules")
     gate = [open('%s/gate%d.bin' % (tmp, k), 'rb').read() for k in range(n)]
     for r in ('seed', 'tick', 'players', 'parks', 'stock'):
         ok &= check(all(region(g, r, n) == region(gate[0], r, n) for g in gate[1:]), 'sync %s identical' % r)
@@ -135,6 +141,7 @@ def main():
     ap.add_argument('--players', type=int, default=4)
     ap.add_argument('--rejoin', action='store_true')
     ap.add_argument('--port', type=int, default=7790)
+    ap.add_argument('--rules', default='', help="the host's modern rules (KEY,KEY); the joiners start with none")
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
                     else os.path.join(HERE, 'build-linux', 'themepark'))
     a = ap.parse_args()

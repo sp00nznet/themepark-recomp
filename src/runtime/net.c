@@ -64,6 +64,7 @@ typedef int SOCKET;
 #include "recomp_types.h"
 #include "dos32.h"
 #include "net.h"
+#include "rules.h"
 
 #define M8(a)  (*(uint8_t*)dos32_mem(a))
 #define M16(a) (*(uint16_t*)dos32_mem(a))
@@ -95,8 +96,8 @@ static int checkpoint_every = 750;   /* frames: 30 s at 25 fps; TP_NET_CP */
 enum { DATA, SAVED, ROLLBACK, LIST, DOWN, UP, ACTION };
 typedef struct { uint8_t to, from, type, pad; uint32_t epoch, len; } hdr_t;
 typedef struct { uint32_t magic; uint8_t want, pad[3]; uint32_t game; } hello_t;      /* joiner -> host */
-typedef struct { uint8_t id, n, rejoin, pad; uint32_t game, epoch; } welcome_t;       /* host -> joiner */
-#define MAGIC 0x544E5054u   /* "TPNT" */
+typedef struct { uint8_t id, n, rejoin, pad; uint32_t game, epoch, rules; } welcome_t;   /* host -> joiner */
+#define MAGIC 0x324E5054u   /* "TPN2": the welcome carries the host's modern rules */
 
 static CRITICAL_SECTION lk;      /* links, queues, the saved lists, the rollback */
 static SOCKET link_[4];          /* host: to player i; others: link_[0], to the host */
@@ -354,7 +355,7 @@ static void admit(SOCKET s) {
     if (h.want > 0 && h.want < net_n && !up[h.want] && (h.game == game_id || h.game == 0)) id = h.want;
     for (int i = 1; i < net_n && id < 0; i++) if (!up[i]) id = i;
     if (id < 0) { LeaveCriticalSection(&lk); closesocket(s); return; }   /* game full */
-    welcome_t w = { (uint8_t)id, (uint8_t)net_n, 1, 0, game_id, epoch };
+    welcome_t w = { (uint8_t)id, (uint8_t)net_n, 1, 0, game_id, epoch, tp_rules };
     if (all(s, &w, sizeof w, 0)) { LeaveCriticalSection(&lk); closesocket(s); return; }
     nodelay(s);
     link_[id] = s; up[id] = 1; listed[id] = 0;
@@ -397,6 +398,7 @@ static int greet(SOCKET s, int want, uint32_t game, int* rejoin) {
     welcome_t w;
     if (all(s, &h, sizeof h, 0) || all(s, &w, sizeof w, 1)) return -1;
     net_me = w.id; net_n = w.n; game_id = w.game; epoch = w.epoch;
+    tp_rules = w.rules;             /* every machine plays by the host's */
     *rejoin = w.rejoin;
     return 0;
 }
@@ -462,7 +464,7 @@ static void connect_all(void) {
             int id = -1;
             if (net_resume && h.game == game_id && h.want > 0 && h.want < net_n && !up[h.want]) id = h.want;
             for (int i = 1; i < net_n && id < 0; i++) if (!up[i]) id = i;
-            welcome_t wl = { (uint8_t)id, (uint8_t)net_n, (uint8_t)net_resume, 0, game_id, epoch };
+            welcome_t wl = { (uint8_t)id, (uint8_t)net_n, (uint8_t)net_resume, 0, game_id, epoch, tp_rules };
             if (all(s, &wl, sizeof wl, 0)) { closesocket(s); continue; }
             nodelay(s);
             link_[id] = s; up[id] = 1; got++;
@@ -490,6 +492,7 @@ static void connect_all(void) {
     }
     save_last();
     fprintf(stderr, "themepark: network: player %d of %d%s\n", net_me + 1, net_n, resync ? ", rejoining" : "");
+    fprintf(stderr, "themepark: network: modern rules %#x%s\n", tp_rules, net_me ? " (the host's)" : "");
 }
 
 /* ---- the overrides ---------------------------------------------------------- */

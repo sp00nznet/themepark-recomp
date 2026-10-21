@@ -27,6 +27,7 @@
 #include "dos32.h"
 #include "present.h"
 #include "net.h"
+#include "rules.h"
 #include <unistd.h>
 #include "pad.h"
 #include "music.h"
@@ -364,6 +365,27 @@ static void network_menu(void) {
     else if (k == 5 && net_me == 0) net_rules_grant(j, -10000);
 }
 
+/* Modern rules (rules.c): each on or off; the host's in a network game. */
+static void rules_menu(void) {
+    for (;;) {
+        char text[1600], t[RULE_MAX][96];
+        const char* l[RULE_MAX + 1];
+        int n = snprintf(text, sizeof text, "%s", net_n ? "In a network game everyone plays by the host's rules.\n\n" :
+                         "Changes to how the 1994 game behaves, each off unless you turn it on.\n\n");
+        for (int i = 0; i < rule_count && n < (int)sizeof text; i++) {
+            int on = (tp_rules & rule_list[i].bit) != 0;
+            n += snprintf(text + n, sizeof text - n, "%s %s\n   %s\n", on ? "[on] " : "[off]", rule_list[i].label, rule_list[i].about);
+            snprintf(t[i], sizeof t[i], "%s: %s", on ? "Turn off" : "Turn on", rule_list[i].label);
+            l[i] = t[i];
+        }
+        l[rule_count] = "Close";
+        int c = net_n ? (ask(text, &l[rule_count], 1), -1) : ask(text, l, rule_count + 1);
+        if (c < 0 || c >= rule_count) return;
+        tp_rules ^= rule_list[c].bit;
+        rules_save(ini_path);
+    }
+}
+
 /* F10, or a right-click on the bars. */
 static void settings_menu(void) {
     char text[512], ini_hires[8], sizes[4][32];
@@ -375,8 +397,9 @@ static void settings_menu(void) {
              "F12 scaling, F9 colour, F11 fullscreen, Ctrl+PgUp/PgDn speed, R 640x480 in a park",
              scale_labels[g_present.scale], g_present.look ? "vivid" : "natural", game_fps,
              muted ? "muted" : "on", hires ? "yes" : "no");
-    const char* top[] = { "Save state", "Load state", "Network", "Window size", "Scaling", "Speed", "Music", "More", "Close" };
-    int c = ask(text, top, 9);
+    const char* top[] = { "Save state", "Load state", "Network", "Window size", "Scaling", "Speed", "Music", "More",
+                          "Modern rules", "Close" };
+    int c = ask(text, top, 10);
     if (c == 2) { network_menu(); return; }
     if (c > 2) c--;
     switch (c) {
@@ -442,6 +465,7 @@ static void settings_menu(void) {
         else if (c == 2) WritePrivateProfileStringA("game", "hires", hires ? "0" : "1", ini_path);
         else if (c == 3) res_menu();
         break; }
+    case 7: rules_menu(); return;
     default: return;
     }
     save_settings();
@@ -554,7 +578,9 @@ void present_run(void) {
         pad_poll(fw, fh, speed_step);
         int w, h, ow, oh;
         SDL_GetRendererOutputSize(ren, &ow, &oh);
-        if (dos32_frame(frame, 1920, 1080, &w, &h) && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+        int got = dos32_frame(frame, 1920, 1080, &w, &h);
+        if (got && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+        if (got) lights_apply(frame, w, h);
         if (ow != cw || oh != ch) { cw = ow; ch = oh; layout(); }
         set_title();
         draw(ren, g_present.scale, g_present.look);
@@ -575,7 +601,7 @@ void present_close(void) {
  * 1440x1080, SDL's software renderer into DIR/<mode>.bmp, no window. */
 int present_test(const char* dir) {
     int w, h, bad = 0;
-    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; }
+    if (dos32_frame(frame, 1920, 1080, &w, &h)) { fw = w; fh = h; lights_apply(frame, w, h); }
     cw = 1440; ch = 1080;
     for (int m = 0; m < SCALE_COUNT; m++) {
         char path[MAX_PATH];

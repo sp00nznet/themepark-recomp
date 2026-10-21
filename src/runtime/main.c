@@ -6,6 +6,7 @@
  *                 [--click T:x,y] [--key T:sc] [--save T:slot] [--load T:slot]
  *                 [--game DIR] [--fps N] [--res WxH] [--intro | --nointro] [--music PACK]
  *                 [--scale sharp|smooth|crt|nearest|integer] [--fullscreen] [--gdi]
+ *                 [--rules KEY,KEY|none] [--call T:ADDR[:A1[:A2[:A3]]]]
  *                 [-- game args]
  *
  * The game itself runs on a thread of its own with a large stack (each guest
@@ -22,6 +23,7 @@
 #include "present.h"
 #include "audio.h"
 #include "music.h"
+#include "rules.h"
 
 extern const uint32_t recomp_image_base, recomp_image_size, recomp_image_stack, recomp_entry_va;
 extern const uint8_t recomp_image[];
@@ -65,6 +67,8 @@ typedef struct { long frame; int kind, a, b; } ev_t;
 static char dump_path[8][MAX_PATH];
 static int ndump;
 static ev_t evs[256];
+static uint32_t call_args[16][5];   /* --call: address, count, arguments */
+static int ncall;
 static int nev;
 long frame_no;               /* 70 Hz frames of guest time; sound.c logs with it */
 
@@ -77,6 +81,12 @@ static void add_event(int kind, const char* spec) {
     if (kind == 'p' && sscanf(spec, "%lf:%x=%x", &t, &a, &b) != 3) return;
     if ((kind == 'G' || kind == 'H') && sscanf(spec, "%lf:%d:%d", &t, &a, &b) != 3) return;
     if (kind == 'R' && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
+    if (kind == 'C') {                 /* --call T:ADDR[:A1[:A2[:A3]]], hex */
+        uint32_t* c = call_args[ncall];
+        int n = ncall < 16 ? sscanf(spec, "%lf:%x:%x:%x:%x", &t, &c[0], &c[2], &c[3], &c[4]) : 0;
+        if (n < 2) return;
+        c[1] = (uint32_t)(n - 2); a = ncall++;
+    }
     if (kind == 'd') { if (sscanf(spec, "%lf:", &t) != 1 || ndump >= 8) return;
                        snprintf(dump_path[ndump], MAX_PATH, "%s", strchr(spec, ':') + 1); a = ndump++; }
     evs[nev].frame = (long)(t * 70); evs[nev].kind = kind; evs[nev].a = a; evs[nev].b = b; nev++;
@@ -104,6 +114,8 @@ static void run_events(void) {
                 else if (evs[i].kind == 'H') net_rules_grant(evs[i].a - 1, evs[i].b);
                 else net_rules_share(evs[i].a - 1, 1);
             }
+        } else if (evs[i].kind == 'C') {
+            if (f == frame_no) rules_queue_call(call_args[evs[i].a][0], (int)call_args[evs[i].a][1], &call_args[evs[i].a][2]);
         } else if (evs[i].kind == 'f') {
             if (f == frame_no) game_fps = evs[i].a;
         } else if (evs[i].kind == 's' || evs[i].kind == 'l') {   /* --save / --load T:slot */
@@ -159,6 +171,7 @@ static void on_retrace(void) {
     if (!rec || (tick++ & 1)) return;
     int w, h;
     if (!dos32_frame(rec_buf, 1920, 1080, &w, &h)) { w = rec_w ? rec_w : 320; h = rec_h ? rec_h : 200; memset(rec_buf, 0, sizeof rec_buf); }
+    else lights_apply(rec_buf, w, h);
     if (!rec_w) { rec_w = w; rec_h = h; }
     if (w != rec_w || h != rec_h) {   /* one size per file: scale nearest into the first */
         static uint32_t tmp[1920 * 1080];
@@ -264,6 +277,7 @@ int main(int argc, char** argv) {
         play_intro = GetPrivateProfileIntA("game", "intro", -1, ini);
         GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
         GetPrivateProfileStringA("sound", "music", "", music_name, sizeof music_name, ini);
+        rules_load(ini);
     }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;
@@ -301,6 +315,16 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--save") && i + 1 < argc) add_event('s', argv[++i]);
         else if (!strcmp(argv[i], "--load") && i + 1 < argc) add_event('l', argv[++i]);
         else if (!strcmp(argv[i], "--dump") && i + 1 < argc) add_event('d', argv[++i]);
+        else if (!strcmp(argv[i], "--call") && i + 1 < argc) add_event('C', argv[++i]);
+        else if (!strcmp(argv[i], "--rules") && i + 1 < argc) {   /* exactly these modern rules, for this run */
+            const char* v = argv[++i];
+            tp_rules = 0;
+            for (int k = 0; k < rule_count; k++) {
+                const char* m = strstr(v, rule_list[k].key);
+                size_t n = strlen(rule_list[k].key);
+                if (m && (m == v || m[-1] == ',') && (m[n] == 0 || m[n] == ',')) tp_rules |= rule_list[k].bit;
+            }
+        }
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc) add_event('p', argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc && nwatch < 8) watch[nwatch++] = strtoul(argv[++i], NULL, 16);
         else if (!strcmp(argv[i], "--game") && i + 1 < argc) snprintf(root, sizeof root, "%s", argv[++i]);

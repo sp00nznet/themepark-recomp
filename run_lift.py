@@ -67,6 +67,8 @@ OVERRIDES = {
     0x00472950: 'hold_back_memory',
     # The pointer's buffers, taken once and not again at every resolution change (#6).
     0x0046DF44: 'mouse_setup', 0x0046E8D0: 'pool_alloc',
+    # The game moving the pointer is not the player: the attract demo kept ending.
+    0x00401191: 'set_cursor',
     # Custom resolutions (#11): the 640x480 mode set and the VESA call under it.
     0x0046ECF0: 'hires_mode', 0x0046EC50: 'lores_mode', 0x0046E658: 'vesa_set',
     0x0044F63F: 'resource_load', 0x00444ED6: 'screen_update', 0x0043DFAC: 'park_zones',
@@ -90,6 +92,12 @@ OVERRIDES = {
     0x004393BE: 'net_start', 0x00438A01: 'net_present', 0x00439414: 'net_connect',
     0x00438F65: 'net_send', 0x004390DF: 'net_receive', 0x00439B20: 'net_hangup',
     0x004399F2: 'net_exchange', 0x0041CCF8: 'net_dispatch',
+    # Modern rules, each off unless turned on (src/runtime/rules.c, docs/rules.md).
+    0x00424149: 'guard_patrol', 0x0043D88D: 'thug_caught', 0x0041276C: 'guest_stuck', 0x0044CBDB: 'advisor',
+    0x00422BCF: 'ent_perform', 0x00422A06: 'ent_walk', 0x004248ED: 'staff_drop',
+    0x0042542D: 'strike_return', 0x004517E0: 'handyman_decide', 0x00453E5D: 'patrol_step',
+    0x004187D8: 'fence_place', 0x00430DA6: 'lamp_place', 0x0041845A: 'guest_spawn', 0x004564F1: 'guest_spawn2',
+    0x00430E92: 'fountain_place', 0x004105D7: 'bulldoze', 0x00437D38: 'palette_dim', 0x0040B837: 'park_view',
 }
 
 # INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same

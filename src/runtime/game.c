@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "dos32.h"
+#include "rules.h"
 
 double game_fps = 25.0;   /* about what a fast 486 managed; main.c --fps */
 
@@ -78,6 +79,7 @@ extern uint32_t g_cur_func;   /* the lifted function running now */
 void pace_frame(void (*lifted)(void)) {
     int req = state_request;
     if (req) { state_request = 0; do_state(req); }
+    rules_frame();
     polled = 1;
     pace_wait();
     lifted();
@@ -104,6 +106,7 @@ void pace_present(void (*lifted)(void)) {
     }
     else if (!polled) pace_wait();
     polled = 0;
+    lights_shown(0);
     lifted();
 }
 
@@ -117,6 +120,7 @@ void pace_present(void (*lifted)(void)) {
  * plain 70 Hz wait. */
 void pace_retrace(void (*lifted)(void)) {
     if (g_cur_func >= 0x00434EA5u && g_cur_func < 0x00436F27u) {
+        lights_shown(1);
         if (!polled) pace_wait();
         polled = 0;
     }
@@ -155,6 +159,16 @@ void mouse_setup(void (*lifted)(void)) {
     mouse_setup_allocs = 0;
     lifted();
     mouse_setup_allocs = -1;
+}
+
+/* The game putting the pointer somewhere (0x401191) is not the player moving
+ * it: the idle check (0x40111F) remembers the new place too. Otherwise the
+ * attract demo, which centres the pointer as its park opens in 640x480 (our
+ * default), took that for a move and ended at once. */
+void set_cursor(void (*lifted)(void)) {
+    lifted();
+    *(uint16_t*)dos32_mem(0x4C660A) = *(uint16_t*)dos32_mem(0x4AECAC);
+    *(uint16_t*)dos32_mem(0x4C660C) = *(uint16_t*)dos32_mem(0x4AECAE);
 }
 
 void pool_alloc(void (*lifted)(void)) {   /* 0x46E8D0(bytes) */
