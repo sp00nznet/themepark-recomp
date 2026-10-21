@@ -79,6 +79,7 @@ no `game\` or no build it prints `SKIP` and exits 0. Today: 6/6.
 ```
 py -3 tools/mpcheck.py --players 4      # 2, 3 or 4 headless players on this machine
 py -3 tools/mpcheck.py --rejoin         # player 2 crashes at 65 s and rejoins
+py -3 tools/mpcheck.py --players 2 --rules guards,unstick,advisor   # the joiners get the host's rules
 ```
 
 Each player is scripted into a park through the menus and its memory dumped.
@@ -95,6 +96,17 @@ the scripted input above. `TP_NETLOG=1` logs the syncs, checkpoints and
 rollbacks; `TP_NET_CP=N` checkpoints every N frames instead of 750. Headless,
 a player who leaves ends the game for everyone (so a test ends), unless
 `TP_NET_REJOIN=1`, which waits for them as a real game does.
+
+## Modern rules
+
+```
+py -3 tools/rulescheck.py               # each rule off and on, in the game's demo park
+```
+
+Loads DEMO.GY as a game and tries each rule ([rules.md](rules.md)): a guard
+and 12 thugs (all caught with the rule, 5 without), a guest put in a fenced
+pocket (it walks out with the rule and stays stuck without), and a ride
+marked as just researched (the advisor says so). A few seconds a run.
 
 ## On netlab
 
