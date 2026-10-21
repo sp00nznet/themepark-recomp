@@ -97,6 +97,7 @@ OVERRIDES = {
     0x00422BCF: 'ent_perform', 0x00422A06: 'ent_walk', 0x004248ED: 'staff_drop',
     0x0042542D: 'strike_return', 0x004517E0: 'handyman_decide', 0x00453E5D: 'patrol_step',
     0x004187D8: 'fence_place', 0x00430DA6: 'lamp_place', 0x0041845A: 'guest_spawn', 0x004564F1: 'guest_spawn2',
+    0x00430E92: 'fountain_place', 0x004105D7: 'bulldoze',
 }
 
 # INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same

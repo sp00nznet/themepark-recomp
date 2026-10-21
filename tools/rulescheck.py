@@ -130,6 +130,18 @@ def building(exe):
                'building: fences go under the coaster')
     ok &= check(off.count('call 00430da6 -> 00000000') == 3 and on.count('lamp on the path') == 3,
                 'building: lamps go on a path')
+    # A fountain in the plaza by the gate (33,52), then bulldozed: the plaza comes back.
+    import struct
+    ft = ['--poke', '55:4c6646=12', '--poke', '55:4c6647=00', '--call', '55.2:430e92:d21']
+    placed = dump_bytes(exe, 'building', 57, ft, 56)
+    gone = dump_bytes(exe, 'building', 58, ft + ['--call', '56.5:4105d7:d21'], 57.5)
+    def kind(d, x, y):
+        tiles = struct.unpack_from('<I', d, 0x4C3B08 - 0x400000)[0]
+        t = d[tiles + (y * 64 + x) * 4 + 2 - 0x400000]
+        return struct.unpack_from('<H', d, 0x4A44D9 + t * 4 - 0x400000)[0]
+    foot = [(x, y) for y in (51, 52) for x in (32, 33, 34)]
+    ok &= check(all(kind(placed, x, y) == 0x8000 for x, y in foot) and all(kind(gone, x, y) == 2 for x, y in foot),
+                'building: a fountain on a path, and the path back')
     return ok
 
 

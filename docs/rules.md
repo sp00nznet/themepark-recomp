@@ -153,7 +153,10 @@ was hired in; give them patrols.
   way guests arrive fills those too); every piece needs one.
 
 **With the rule:** fences of every kind go under raised track; lamp posts go
-on plain paths (not queues or bridges), and guests walk past them; and the
+on plain paths (not queues or bridges), and guests walk past them; fountains
+go on paths too, say in the middle of a square, with the paths round them
+joined up and anyone standing there stepping aside (take the fountain away
+and the path comes back; a litter bin in the way has to go first); and the
 guests leave 150 more places in the table for building. That last one means
 up to 150 fewer guests in the park at once (in the demo park after 15
 minutes: 700 instead of 792).
@@ -162,8 +165,9 @@ minutes: 700 instead of 792).
 
 The game draws a fence under track without the track's pillars, so the
 track looks unsupported there. Rubber tubing and the race track are part of
-the ground, not raised, and take nothing under them. Fountains (3 by 2 tiles,
-solid) still go on grass only.
+the ground, not raised, and take nothing under them.
+
+![A fountain in the square by the gate](screenshots/fountain-rule.png)
 
 ## Asked for, and not possible
 

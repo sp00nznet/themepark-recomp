@@ -29,7 +29,7 @@ versions follow [SemVer](https://semver.org/).
     legs take the shortest way along the paths, so patrols of up to 8
     waypoints go round.
   - More room to build (#23, #21, #15): fences under raised track, lamp posts
-    on paths, and track that keeps building in a full park (track pieces
+    and fountains on paths, and track that keeps building in a full park (track pieces
     share a table with the guests, who could fill it).
   - The guards rule also lets go of a caught thug whose guard was moved or
     fired, which paced round her or froze for good (#29).

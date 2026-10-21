@@ -63,7 +63,7 @@ const rule_t rule_list[] = {
       "Back from a strike or off the paths, a handyman goes to the nearest path (and his patrol) instead of mowing far away, "
       "and patrols take the shortest way between waypoints, however many (#7)." },
     { RULE_BUILD, "building", "More room to build",
-      "Hedges, walls and fences go under raised track, lamp posts go on paths, and track still builds in a full park "
+      "Hedges, walls and fences go under raised track, lamp posts and fountains go on paths, and track still builds in a full park "
       "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
@@ -414,6 +414,111 @@ static void with_reserve(void (*lifted)(void)) {   /* a guest spawner, sees fewe
 }
 void guest_spawn(void (*lifted)(void)) { with_reserve(lifted); }    /* 0x41845A */
 void guest_spawn2(void (*lifted)(void)) { with_reserve(lifted); }   /* 0x4564F1 */
+
+/* Fountains on paths (#21). A fountain is an object (type 0x18, +0xC kind 4)
+ * on the middle tile of a 3x2 footprint (offsets at 0x4A8FBE: -65 -64 -63 -1
+ * 0 +1); placing it (0x430E92(tile), the feature picked at 0x4C6646) needs
+ * all six tiles bare ground, and makes them solid (type 0x67); removing it
+ * (0x43121E(record)) makes them grass. With the rule a fountain also goes
+ * where its footprint is plain path (or path and grass): whoever stands there
+ * steps off to the nearest path, the paths round it join up again, and the
+ * fountain remembers which tiles were path (+0x14, which only toilets use:
+ * 0xF000 | one bit a tile) so taking it away lays them back. */
+static const int foot[6] = { -65, -64, -63, -1, 0, 1 };
+#define FOUNTAIN_KIND 4
+#define PATH_TYPE 0x55            /* a path tile; 0x418D5A picks the variant that joins its neighbours */
+#define PATH_MARK 0xF000
+
+static void join_paths(int tile) { uint32_t a = (uint32_t)tile; if (tile >= 0 && tile < 4096) guest_call(0x418D5A, 1, &a); }
+
+static void join_round(int centre) {          /* the paths on the footprint and the ring round it */
+    for (int dy = -2; dy <= 1; dy++)
+        for (int dx = -2; dx <= 2; dx++) {
+            int x = centre % 64 + dx, y = centre / 64 + dy;
+            if (x >= 0 && x < 64 && y >= 0 && y < 64 && (tflags(y * 64 + x) & 2)) join_paths(y * 64 + x);
+        }
+}
+
+static int in_foot(int centre, int t) { for (int k = 0; k < 6; k++) if (centre + foot[k] == t) return 1; return 0; }
+
+void fountain_place(void (*lifted)(void)) {
+    int c = (int)(M32(g_esp + 4) & 0xFFFF), paths = 0;
+    if (!(tp_rules & RULE_BUILD) || M16(0x4BCA9E + M16(FEATURE_PICKED) * 0x38u) != FOUNTAIN_KIND || c < 65 || c >= 4096 - 1 ||
+        (M8(M32(TILES) + 4u * (uint32_t)c + 3) & 8)) { lifted(); return; }
+    for (int k = 0; k < 6; k++) {
+        int t = c + foot[k];
+        uint16_t f = tflags(t);
+        if (f != 0 && f != 2) { rlog("fountain: %d,%d is not grass or path", t % 64, t / 64); lifted(); return; }
+        if (chain_tail(t, 0) != 0) { rlog("fountain: a tree or lamp at %d,%d", t % 64, t / 64); lifted(); return; }
+        for (int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)t), hops = 0; i > 0 && hops < 256; hops++) {
+            uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+            uint8_t ty = M8(q + 4);
+            if (ty != 2 && ty != 8 && ty != 0x1A) {   /* track, another object */
+                rlog("fountain: a type %#x object at %d,%d", ty, t % 64, t / 64); lifted(); return;
+            }
+            i = (int16_t)M16(q + 2);
+        }
+        if (f == 2) paths |= 1 << k;
+    }
+    if (!paths) { lifted(); return; }
+    /* Off the footprint, to the nearest path outside it. */
+    for (int k = 0; k < 6; k++) {
+        int t = c + foot[k];
+        for (int guard = 0; guard < 64; guard++) {
+            int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)t);
+            if (i <= 0) break;
+            uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+            int best = -1, bd = 99;
+            for (int u = 0; u < 4096; u++) {
+                if (!(tflags(u) & 2) || in_foot(c, u)) continue;
+                int d = abs(u % 64 - t % 64) + abs(u / 64 - t / 64);
+                if (d < bd) { bd = d; best = u; }
+            }
+            if (best < 0) { lifted(); return; }
+            uint32_t a[3] = { q, (uint32_t)((best % 64) << 8 | 0x80), (uint32_t)((best / 64) << 8 | 0x80) };
+            guest_call(0x408A44, 3, a);
+        }
+    }
+    uint8_t type[6];
+    for (int k = 0; k < 6; k++) { uint32_t t = M32(TILES) + 4u * (uint32_t)(c + foot[k]); type[k] = M8(t + 2); if (paths >> k & 1) M8(t + 2) = 0; }
+    lifted();
+    if (!g_eax) {                                  /* not placed: the paths as they were */
+        for (int k = 0; k < 6; k++) M8(M32(TILES) + 4u * (uint32_t)(c + foot[k]) + 2) = type[k];
+        return;
+    }
+    for (int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)c), hops = 0; i > 0 && hops < 256; hops++) {
+        uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+        if (M8(q + 4) == 0x18 && M8(q + 0xC) == FOUNTAIN_KIND) { M16(q + 0x14) = (uint16_t)(PATH_MARK | paths); break; }
+        i = (int16_t)M16(q + 2);
+    }
+    join_round(c);
+    rlog("fountain on the path at %d,%d", c % 64, c / 64);
+}
+
+/* The bulldozer (0x4105D7(tile)) takes a fountain away from any of its tiles,
+ * and leaves the middle one grass after the fountain's own removal. */
+void bulldoze(void (*lifted)(void)) {
+    int t = (int)(M32(g_esp + 4) & 0xFFFF), c = -1;
+    uint32_t q = 0;
+    uint16_t mark = 0;
+    for (int k = 0; k < 6 && c < 0 && (tp_rules & RULE_BUILD); k++) {   /* the fountain this tile is part of */
+        int cc = t - foot[k];
+        if (cc < 0 || cc >= 4096) continue;
+        for (int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)cc), hops = 0; i > 0 && hops < 256; hops++) {
+            uint32_t r = M32(PEOPLE) + (uint32_t)i * REC;
+            if (M8(r + 4) == 0x18 && M8(r + 0xC) == FOUNTAIN_KIND && (M16(r + 0x14) & 0xF000) == PATH_MARK) {
+                c = cc; q = r; mark = M16(r + 0x14); break;
+            }
+            i = (int16_t)M16(r + 2);
+        }
+    }
+    lifted();
+    if (c < 0 || M8(q + 4) == 0x18) return;       /* no fountain of ours, or it is still there */
+    for (int k = 0; k < 6; k++)
+        if (mark >> k & 1) M8(M32(TILES) + 4u * (uint32_t)(c + foot[k]) + 2) = PATH_TYPE;
+    join_round(c);
+    rlog("fountain taken away at %d,%d: the path is back", c % 64, c / 64);
+}
 
 /* ---- stuck guests (#17) ------------------------------------------------- */
 /* A guest whose way out the game cannot find (0x412BA6) goes to state 0x20,
