@@ -558,6 +558,7 @@ void advisor(void (*lifted)(void)) {
     if (say_until && now < say_until && now + SAY_FOR + 1 > say_until) {   /* ours, on screen */
         uint32_t a = ADVICE_TEXT;
         guest_call(0x44E2C5, 1, &a);
+        g_esp += 4;                               /* the original's ret, which did not run */
         return;
     }
     say_until = 0;
@@ -577,6 +578,7 @@ void advisor(void (*lifted)(void)) {
         say_until = now + SAY_FOR;
         uint32_t a = ADVICE_TEXT;
         guest_call(0x44E2C5, 1, &a);
+        g_esp += 4;                               /* the original's ret */
     }
     else lifted();
     M32(park + 0xB6) = total;
