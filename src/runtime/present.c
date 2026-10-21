@@ -330,7 +330,7 @@ static void relaunch(const char* args) {
                     "Network game", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK) return;
     char exe[MAX_PATH], cmd[MAX_PATH + 320];
     GetModuleFileNameA(NULL, exe, sizeof exe);
-    snprintf(cmd, sizeof cmd, "\"%s\" %s", exe, args);
+    snprintf(cmd, sizeof cmd, "\"%s\" --nointro %s", exe, args);   /* seen once already (#37) */
     STARTUPINFOA si = { sizeof si };
     PROCESS_INFORMATION pi;
     if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
