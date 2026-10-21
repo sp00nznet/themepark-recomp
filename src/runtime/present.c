@@ -409,13 +409,19 @@ static void network_command(int cmd) {
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
-           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900, ID_RULES = 1000 };
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900, ID_RULES = 1000, ID_LANG = 1100 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
     HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
           sv = CreatePopupMenu(), ld = CreatePopupMenu(), rs = CreatePopupMenu(), mu = CreatePopupMenu(),
-          ru = CreatePopupMenu();
+          ru = CreatePopupMenu(), la = CreatePopupMenu();
+    /* The game's languages (LANGn-0.DAT), read at start-up. */
+    static const char* langs[5] = { "English", "Deutsch", "Italiano", "Espa\xF1ol", "Fran\xE7" "ais" };
+    int lang = GetPrivateProfileIntA("game", "lang", 0, ini_path);
+    for (int i = 0; i < 5; i++) AppendMenuA(la, MF_STRING | (lang == i ? MF_CHECKED : 0), ID_LANG + i, langs[i]);
+    AppendMenuA(la, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(la, MF_STRING | MF_GRAYED, 0, "From the next start");
     /* Modern rules (rules.c): in a network game, the host's, and fixed. */
     for (int i = 0; i < rule_count; i++)
         AppendMenuA(ru, MF_STRING | (tp_rules & rule_list[i].bit ? MF_CHECKED : 0) | (net_n ? MF_GRAYED : 0),
@@ -475,6 +481,7 @@ static void settings_menu(int sx, int sy) {
     AppendMenuA(m, MF_STRING | (ini_hires[0] != '0' ? MF_CHECKED : 0), ID_HIRES,
                 "Open parks in 640x480 (R switches in a park)");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)rs, "Park resolution");
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)la, "Language");
     AppendMenuA(m, MF_SEPARATOR, 0, NULL);
     AppendMenuA(m, MF_POPUP, (UINT_PTR)ru, "Modern rules");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
@@ -504,6 +511,12 @@ static void settings_menu(int sx, int sy) {
         snprintf(state_note, 96, "park resolution %d x 480: at the next park, or R", w);
         state_note_until = GetTickCount() + 4000;
         if (!g_present.fullscreen && ch >= 480) size_window(ch / 240);   /* the same scale, the new shape */
+    }
+    else if (cmd >= ID_LANG && cmd < ID_LANG + 5) {
+        char v[4] = { (char)('0' + cmd - ID_LANG), 0 };
+        WritePrivateProfileStringA("game", "lang", v, ini_path);
+        snprintf(state_note, 96, "language: from the next start");
+        state_note_until = GetTickCount() + 4000;
     }
     else if (cmd >= ID_RULES && cmd < ID_RULES + rule_count && !net_n) {
         tp_rules ^= rule_list[cmd - ID_RULES].bit;
