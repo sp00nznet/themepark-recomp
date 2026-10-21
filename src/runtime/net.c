@@ -492,6 +492,7 @@ static void connect_all(void) {
     }
     save_last();
     fprintf(stderr, "themepark: network: player %d of %d%s\n", net_me + 1, net_n, resync ? ", rejoining" : "");
+    fprintf(stderr, "themepark: network: modern rules %#x%s\n", tp_rules, net_me ? " (the host's)" : "");
 }
 
 /* ---- the overrides ---------------------------------------------------------- */
