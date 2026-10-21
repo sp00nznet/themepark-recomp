@@ -105,8 +105,11 @@ py -3 tools/rulescheck.py               # each rule off and on, in the game's de
 
 Loads DEMO.GY as a game and tries each rule ([rules.md](rules.md)): a guard
 and 12 thugs (all caught with the rule, 5 without), a guest put in a fenced
-pocket (it walks out with the rule and stays stuck without), and a ride
-marked as just researched (the advisor says so). A few seconds a run.
+pocket (it walks out with the rule and stays stuck without), a ride marked
+as just researched (the advisor says so), a guard dropped mid-escort (her
+thug is let go), the entertainers' made-happy count, a handyman dropped on a
+ride (he finds a path), and fences and lamps placed under the coaster and on
+a path. Under a minute in all.
 
 ## On netlab
 

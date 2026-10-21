@@ -20,6 +20,19 @@ versions follow [SemVer](https://semver.org/).
     session, he warns of the year end in November and names what research has
     found, and the shop-price advice no longer asks for twenty times the base
     price an hour in.
+  - Entertainers entertain (#29): no flash between guests, no flicker when
+    fully trained (the walk animation no longer restarts every tile), the
+    panel's PEOPLE ENTERTAINED and PEOPLE MADE HAPPY count (the second was
+    never written), and dropped staff keep their trained speed.
+  - Handymen stay on the job (#7): back from a strike or off the paths, to
+    the nearest path and their patrol instead of mowing a far lawn; patrol
+    legs take the shortest way along the paths, so patrols of up to 8
+    waypoints go round.
+  - More room to build (#23, #21, #15): fences under raised track, lamp posts
+    on paths, and track that keeps building in a full park (track pieces
+    share a table with the guests, who could fill it).
+  - The guards rule also lets go of a caught thug whose guard was moved or
+    fired, which paced round her or froze for good (#29).
 - `tools/rulescheck.py` tries each rule off and on in the demo park;
   `--call T:ADDR[:args]` calls one of the game's functions in a test run
   (hire staff, send thugs, load the demo park).

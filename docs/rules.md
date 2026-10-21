@@ -16,6 +16,9 @@ want. They take effect at once and are kept in `themepark.ini`:
 guards=1
 unstick=1
 advisor=1
+entertainers=1
+handymen=1
+building=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -44,6 +47,12 @@ with them.
 In the demo park, with one guard and 12 thugs sent in over 15 minutes, the
 guard caught 5 without the rule (6 were still loose at the end) and all 12
 with it, each in less than half the time.
+
+The rule also lets go of a thug whose guard has stopped walking it out. In
+1994 a caught thug follows its guard until she throws it out at the gate,
+and nothing else frees it: pick the guard up and drop her somewhere else and
+the thug paces round her for good; fire her and it freezes where it is. With
+the rule it goes back to roaming, and any guard can catch it again.
 
 ### Stuck guests find their way out (`unstick`, issue #17)
 
@@ -81,6 +90,86 @@ grows, so after a while it suggests prices twenty times what anyone pays.
 
 These are on your screen only: what the advisor says is not part of the
 simulation, so they never change a network game's other machines.
+
+### Entertainers entertain (`entertainers`, issue #29)
+
+**In 1994:**
+- When the guest an entertainer is performing for walks off, it drops to
+  standing for one tick, facing a set way, and picks the next guest the tick
+  after. That shows a frame of another animation every 16 ticks: the flicker.
+- Walking, every tile starts the walk animation again. Fully trained staff
+  cross a tile every 2 ticks, so they never get past the first frame and seem
+  to flicker between facings as they glide along.
+- Its panel's PEOPLE ENTERTAINED misses most of the guests it cheers up (it
+  counts only those in another column of tiles), and PEOPLE MADE HAPPY is
+  never counted at all: it always shows 0.
+- Picking up and dropping any member of staff sets their speed back to
+  untrained, until the next training finishes.
+
+**With the rule:** the next guest is picked at once, a walk keeps its
+animation going along a straight line, every guest cheered up counts, a guest
+cheered up past the park's mood threshold counts as made happy, and dropped
+staff keep their trained speed. In the demo park the entertainers' made-happy
+total over 5 minutes goes from 0 to about 1200.
+
+What is not changed: an entertainer knocked out by a thug still quits when
+it comes round, unless you pick it up and drop it first (that saves it, as it
+always did).
+
+### Handymen stay on the job (`handymen`, issue #7)
+
+**In 1994:**
+- After a strike, a handyman walks back from the picket line and takes up
+  his work wherever the walk ends. On grass that means mowing it, patrol
+  area or not, and the picket line is outside the park.
+- A handyman who ends up off the paths, on anything but grass (a ride, a
+  shop, after a failed walk), goes to a fixed lawn near the top of the park
+  and mows it, and from there whatever lawn joins it.
+- Each leg of a patrol uses a short search that cannot go round much; a
+  waypoint it cannot reach is skipped. And setting a patrol leaves the quick
+  preview walk's state behind, so the patrol wanders off for minutes. The
+  more waypoints, the worse.
+
+**With the rule:** back from a strike, or off the paths, a handyman goes to
+the nearest path and on to his patrol, if he has one; with a patrol, he does
+not mow his way out of it; and each patrol leg takes the shortest way along
+the paths. A handyman you drop on a lawn with no patrol still mows it, as
+before. In the demo park, a 6-waypoint patrol goes round in order three times
+in 3 minutes; without the rule the handyman roams for over 3 minutes first.
+
+Not changed yet: handymen bunching in one part of the park. They look for
+litter only 5 tiles straight ahead, so a handyman never leaves the area he
+was hired in; give them patrols.
+
+### More room to build (`building`, issues #23, #21, #15)
+
+**In 1994:**
+- Paths and queues go under raised track (coasters, the big dipper, the
+  water splash, the monorail), but hedges, walls and fences do not.
+- Lamp posts go only on grass, though the prototypes had them on paths.
+- In a busy park, track pieces stop building: the pointer shows a piece
+  fits, and the click does nothing. Track pieces are kept in the same table
+  as the guests, which guests may fill to all but 100 places (and a second
+  way guests arrive fills those too); every piece needs one.
+
+**With the rule:** fences of every kind go under raised track; lamp posts go
+on plain paths (not queues or bridges), and guests walk past them; and the
+guests leave 150 more places in the table for building. That last one means
+up to 150 fewer guests in the park at once (in the demo park after 15
+minutes: 700 instead of 792).
+
+![A fence under the coaster and lamps on a path](screenshots/building-rule.png)
+
+The game draws a fence under track without the track's pillars, so the
+track looks unsupported there. Rubber tubing and the race track are part of
+the ground, not raised, and take nothing under them. Fountains (3 by 2 tiles,
+solid) still go on grass only.
+
+## Asked for, and not possible
+
+- **Turning shops and sideshows** (issue #20): the game has one drawing of
+  each shop and sideshow, facing one way; only ride entrances and the toilets
+  are drawn four ways. Turning them needs new art.
 
 ## How they work
 
