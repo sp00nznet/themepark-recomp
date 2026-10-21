@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0-alpha.1] - 2026-10-21
+
 ### Added
 - F10, *Language*: the game's five languages (English, Deutsch, Italiano,
   Español, Français), from the next start; `[game] lang=`. Every CD pressing
@@ -21,6 +23,8 @@ versions follow [SemVer](https://semver.org/).
 ### Fixed
 - Setup builds every time (#37, #10): run again after an update, it kept the
   old lifted C and the old exe, so updates never reached the game.
+- The installer no longer vanishes on an error (#33): it shows what went
+  wrong and keeps a log in `%APPDATA%ecomp-launcher\launcher.log`.
 - Wider parks (#11): the stock market, research, the bank and the game's
   other full screens were sheared across the screen; they draw 640 wide at
   the left again. The interface no longer turns red: the game's bank switch
