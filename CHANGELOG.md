@@ -5,6 +5,11 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- F10, *Language*: the game's five languages (English, Deutsch, Italiano,
+  Español, Français), from the next start; `[game] lang=`. Every CD pressing
+  checked on archive.org has the same MAIN.EXE and data as the supported
+  1994 CD (README: which copies work).
 ### Fixed
 - Wider parks (#11): the stock market, research, the bank and the game's
   other full screens were sheared across the screen; they draw 640 wide at

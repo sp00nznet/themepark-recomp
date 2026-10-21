@@ -458,12 +458,17 @@ static void settings_menu(void) {
         break; }
     case 6: {
         const char* l[] = { g_present.look ? "Natural colour" : "Vivid colour", muted ? "Sound on" : "Mute",
-                            hires ? "Parks in 320x200" : "Parks in 640x480", "Park resolution", "Cancel" };
-        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 5);
+                            hires ? "Parks in 320x200" : "Parks in 640x480", "Park resolution", "Language", "Cancel" };
+        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 6);
         if (c == 0) g_present.look ^= 1;
         else if (c == 1) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
         else if (c == 2) WritePrivateProfileStringA("game", "hires", hires ? "0" : "1", ini_path);
         else if (c == 3) res_menu();
+        else if (c == 4) {                        /* the game's languages (LANGn-0.DAT), read at start-up */
+            const char* g[] = { "English", "Deutsch", "Italiano", "Español", "Français", "Cancel" };
+            int k = ask("The game's language, from the next start.", g, 6);
+            if (k >= 0 && k < 5) { char v[4] = { (char)('0' + k), 0 }; WritePrivateProfileStringA("game", "lang", v, ini_path); }
+        }
         break; }
     case 7: rules_menu(); return;
     default: return;

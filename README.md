@@ -105,9 +105,22 @@ through GOG Galaxy or GOG's offline installer
 (`setup_theme_park_1.01_cs_(77027).exe`), or the original 1994 CD (the UK
 release or EA's CD-ROM Classics reissue; mount an ISO by double-clicking it).
 The CD's MAIN.EXE is GOG's except for two small mouse fixes GOG made, which
-`run_lift.py` applies, so both build the same program. Other versions (EA's
-store copy, other languages' discs) are untested: `run_lift.py` stops and
-prints the file's SHA-1, and an issue with that is welcome.
+`run_lift.py` applies, so both build the same program.
+
+Which copies work (checked against the discs on archive.org):
+
+| Copy | Works | Notes |
+|---|---|---|
+| GOG (installed, or its offline installer) | yes | |
+| The 1994 CD, any pressing: UK/Europe, US, EA's 1996 and 1998 reissues, CD-ROM Classics, the Japanese two-game disc with Magic Carpet | yes | the same MAIN.EXE and the same data on all of them |
+| The floppy release (1.44M disks) | no | an earlier build of MAIN.EXE (packed with RNC); fewer ride films |
+| The 1996 Asian release (Chinese, Japanese) | no | its own build, MAINCH.EXE, which draws Chinese and Japanese text |
+| The 1994 demos | no | builds of their own |
+
+Every CD carries the game in English, German, Italian, Spanish and French:
+F10, *Language* (from the next start), or `--lang 0`-`4`. For anything else,
+`run_lift.py` stops and prints the file's SHA-1, and an issue with that is
+welcome.
 
 ### The installer (easiest)
 

@@ -277,6 +277,8 @@ int main(int argc, char** argv) {
         play_intro = GetPrivateProfileIntA("game", "intro", -1, ini);
         GetPrivateProfileStringA("game", "mod", "", mod_name, sizeof mod_name, ini);
         GetPrivateProfileStringA("sound", "music", "", music_name, sizeof music_name, ini);
+        GetPrivateProfileStringA("game", "lang", "0", v, sizeof v, ini);   /* F10, Language */
+        if (v[0] >= '0' && v[0] <= '4') { char* l = strstr(args, "-l"); if (l) l[2] = v[0]; }
         rules_load(ini);
     }
     for (int i = 1; i < argc; i++) {
