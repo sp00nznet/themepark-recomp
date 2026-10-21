@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- F10, *Language*: the game's five languages (English, Deutsch, Italiano,
+  Español, Français), from the next start; `[game] lang=`. Every CD pressing
+  checked on archive.org has the same MAIN.EXE and data as the supported
+  1994 CD (README: which copies work).
+
 ## [0.3.0-alpha.1] - 2026-10-21
 
 ### Added
