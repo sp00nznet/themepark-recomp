@@ -5,6 +5,30 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Modern rules (F10, *Modern rules*; `[rules]` in themepark.ini; `--rules`):
+  fixes to how the 1994 game plays, each off until turned on. In a network
+  game everyone plays by the host's (docs/rules.md).
+  - Guards go after thugs nearby (#8). A patrolling guard stands still and
+    looks once every 16 seconds, straight ahead along the path; with the rule
+    it heads for any thug within 12 tiles. In the demo park, one guard caught
+    12 of 12 thugs instead of 5.
+  - Stuck guests find their way out (#17): a guest the game cannot route out
+    is moved out of the pocket it is fenced into, or along the shortest way
+    to the gate, after a few seconds.
+  - The advisor keeps advising (#16): advice no longer fades away over a long
+    session, he warns of the year end in November and names what research has
+    found, and the shop-price advice no longer asks for twenty times the base
+    price an hour in.
+- `tools/rulescheck.py` tries each rule off and on in the demo park;
+  `--call T:ADDR[:args]` calls one of the game's functions in a test run
+  (hire staff, send thugs, load the demo park).
+
+### Fixed
+- The attract demo ended the moment it started when parks open in 640x480
+  (the default): the demo centring the pointer counted as the player moving
+  it.
+
 ## [0.2.0-alpha.1] - 2026-10-20
 
 ### Added
