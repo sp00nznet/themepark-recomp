@@ -29,6 +29,7 @@
 #include "pad.h"
 #include "music.h"
 #include "net.h"
+#include "rules.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
@@ -406,12 +407,20 @@ static void network_command(int cmd) {
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
-           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900 };
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900, ID_RULES = 1000 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
     HMENU m = CreatePopupMenu(), sc = CreatePopupMenu(), sp = CreatePopupMenu(), sz = CreatePopupMenu(),
-          sv = CreatePopupMenu(), ld = CreatePopupMenu(), rs = CreatePopupMenu(), mu = CreatePopupMenu();
+          sv = CreatePopupMenu(), ld = CreatePopupMenu(), rs = CreatePopupMenu(), mu = CreatePopupMenu(),
+          ru = CreatePopupMenu();
+    /* Modern rules (rules.c): in a network game, the host's, and fixed. */
+    for (int i = 0; i < rule_count; i++)
+        AppendMenuA(ru, MF_STRING | (tp_rules & rule_list[i].bit ? MF_CHECKED : 0) | (net_n ? MF_GRAYED : 0),
+                    ID_RULES + i, rule_list[i].label);
+    AppendMenuA(ru, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(ru, MF_STRING | MF_GRAYED, 0, net_n ? "The host's rules, for the whole game" :
+                "Off: the game as in 1994 (docs\\rules.md)");
     char res_ini[16];
     GetPrivateProfileStringA("game", "res", "640x480", res_ini, sizeof res_ini, ini_path);
     int cur = 640, ticked = 0;
@@ -464,6 +473,8 @@ static void settings_menu(int sx, int sy) {
     AppendMenuA(m, MF_STRING | (ini_hires[0] != '0' ? MF_CHECKED : 0), ID_HIRES,
                 "Open parks in 640x480 (R switches in a park)");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)rs, "Park resolution");
+    AppendMenuA(m, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)ru, "Modern rules");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
     DestroyMenu(m);
     if (cmd >= ID_NET && cmd < ID_NET_P + 80) { network_command(cmd); return; }
@@ -491,6 +502,10 @@ static void settings_menu(int sx, int sy) {
         snprintf(state_note, 96, "park resolution %d x 480: at the next park, or R", w);
         state_note_until = GetTickCount() + 4000;
         if (!g_present.fullscreen && ch >= 480) size_window(ch / 240);   /* the same scale, the new shape */
+    }
+    else if (cmd >= ID_RULES && cmd < ID_RULES + rule_count && !net_n) {
+        tp_rules ^= rule_list[cmd - ID_RULES].bit;
+        rules_save(ini_path);
     }
     else if (cmd >= ID_MUSIC && cmd <= ID_MUSIC + npacks) {
         const char* p = cmd == ID_MUSIC ? "" : packs[cmd - ID_MUSIC - 1];

@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "dos32.h"
+#include "rules.h"
 
 double game_fps = 25.0;   /* about what a fast 486 managed; main.c --fps */
 
@@ -78,6 +79,7 @@ extern uint32_t g_cur_func;   /* the lifted function running now */
 void pace_frame(void (*lifted)(void)) {
     int req = state_request;
     if (req) { state_request = 0; do_state(req); }
+    rules_frame();
     polled = 1;
     pace_wait();
     lifted();

@@ -90,6 +90,8 @@ OVERRIDES = {
     0x004393BE: 'net_start', 0x00438A01: 'net_present', 0x00439414: 'net_connect',
     0x00438F65: 'net_send', 0x004390DF: 'net_receive', 0x00439B20: 'net_hangup',
     0x004399F2: 'net_exchange', 0x0041CCF8: 'net_dispatch',
+    # Modern rules, each off unless turned on (src/runtime/rules.c, docs/rules.md).
+    0x00424149: 'guard_patrol',
 }
 
 # INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same

@@ -47,6 +47,7 @@ set(HOST
   src/runtime/music.c
   src/runtime/net.c
   src/runtime/net_rules.c
+  src/runtime/rules.c
   src/runtime/pad.c)
 
 if(WIN32)
