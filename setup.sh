@@ -137,8 +137,20 @@ if [ ! -f "$TOOLKIT/tools/lift/lift32.py" ]; then
   say "  fetching it into $TOOLKIT"
   git clone --quiet --depth 1 "$PCRECOMP_URL" "$TOOLKIT"
 fi
-grep -q dos32_state_save "$TOOLKIT/runtime/dos32/dos32.h" 2>/dev/null && grep -q fix_case "$TOOLKIT/runtime/dos32/dos32.c" ||
-  fail "your pcrecomp at $TOOLKIT is older than this game needs on Linux: git -C \"$TOOLKIT\" pull"
+# The newest toolkit feature the game uses (pcrecomp#123); CMakeLists.txt checks the same.
+current() { grep -q dos32_vesa_custom "$1/runtime/dos32/dos32.h" 2>/dev/null && grep -q fix_case "$1/runtime/dos32/dos32.c"; }
+if ! current "$TOOLKIT"; then
+  [ -n "$PCRECOMP" ] && fail "your pcrecomp at $TOOLKIT (PCRECOMP) is older than this game needs: git -C \"$TOOLKIT\" pull"
+  if [ "$TOOLKIT" = "$PARENT/pcrecomp" ]; then
+    say "  $TOOLKIT is older than this game needs: updating it (git pull)"
+    git -C "$TOOLKIT" pull --quiet --ff-only || fail "could not update $TOOLKIT: git -C \"$TOOLKIT\" pull"
+  else   # an older setup's ../tools: left as it is, a current one beside it
+    say "  $TOOLKIT is older than this game needs: fetching a current one into $PARENT/pcrecomp (the old one is not touched)"
+    git clone --quiet --depth 1 "$PCRECOMP_URL" "$PARENT/pcrecomp"
+    TOOLKIT=$PARENT/pcrecomp
+  fi
+  current "$TOOLKIT" || fail "pcrecomp at $TOOLKIT is still older than this game needs: git -C \"$TOOLKIT\" pull"
+fi
 say "  $TOOLKIT"
 export PCRECOMP=$TOOLKIT
 
