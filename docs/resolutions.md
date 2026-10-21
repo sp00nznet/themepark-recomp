@@ -56,17 +56,22 @@ The following are left alone:
 - The dirty grid's clip (0x444D85–0x444DF0).
 - Stack and structure offsets.
 
-Three more changes, each an override in game.c:
+Four more changes, each an override in game.c:
 
 - **Presenting.** The game shows a full screen as five unrolled VESA bank
   copies: four of 64 KB and one of 0xB000 bytes, nine places in all. At the
   fifth, a host call (`tp_present_tail`, `tp_clear_tail`) copies or clears
   the rest of `tp_w x tp_h`. It switches banks the way the game's switch
   (0x46E6BC) does, but without that function's check, which turns colour 0
-  red past bank 5.
+  red past bank 5. The game's other calls to it get the same check widened
+  (`SCREEN_SITES` 0x46E6D1): bank 15 at any width but 640.
 - **The dirty grid.** The screen update (0x444ED6) copies the 32x16 cells its
   grid marks, and the grid covers 640x480 only. Wider, the update takes its
   whole-screen branch every frame.
+- **The game's own screens.** The stock market, research, the bank and 15
+  more are 320x200 pictures that 0x445EFA doubles into the back buffer, rows
+  of 640 one after another. `double_screen` doubles them at the screen's
+  pitch.
 - **The mouse zones.** The park's zones are 12 bytes each at 0x4A93C3.
   0x43DFAC sets their heights for the mode. `park_zones` sets the widths of
   the edge-scroll strips, the view and the message bar to the screen's
