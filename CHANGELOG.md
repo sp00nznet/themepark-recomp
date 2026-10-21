@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Wider parks (#11): the stock market, research, the bank and the game's
+  other full screens were sheared across the screen; they draw 640 wide at
+  the left again. The interface no longer turns red: the game's bank switch
+  sets colour 0 to red past bank 5, which a wide screen reaches.
+
 ## [0.3.0-alpha.1] - 2026-10-21
 
 ### Added

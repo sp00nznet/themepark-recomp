@@ -280,6 +280,24 @@ void screen_update(void (*lifted)(void)) {
     lifted();
 }
 
+/* The game's own screens (stock market, research and 16 more) are 320x200
+ * pictures that 0x445EFA(src, dst, rows) doubles into the 640x480 back buffer,
+ * rows of 640 one after another, then clears the 80 rows below. Wider, that
+ * shears the picture across the screen (#11), so double it at the screen's
+ * pitch here. Its registers are all saved, so nothing else changes. */
+void double_screen(void (*lifted)(void)) {
+    uint32_t src = M32W(g_esp + 4), dst = M32W(g_esp + 8);
+    unsigned rows = *(uint16_t*)dos32_mem(g_esp + 12);
+    if (tp_w == 640 || (*dos32_mem(0x4CE5F6) & 1) || dst == 0xA0000) { lifted(); return; }
+    for (unsigned y = 0; y < rows; y++) {
+        const uint8_t* s = dos32_mem(src + (y / 2) * 320);
+        uint8_t* d = dos32_mem(dst + y * tp_w);
+        for (int x = 0; x < 640; x++) d[x] = s[x / 2];
+    }
+    if (rows >= 400) memset(dos32_mem(dst + rows * tp_w), 0, 80 * tp_w);
+    g_esp += 4;
+}
+
 /* The park's mouse zones (0x4A93C3, 12 bytes each: x0, y0, x1, y1, ...):
  * 0x43DFAC sets their heights for the mode; their widths are 640 in both
  * (320x200 counts in 640x400). The edge strips, the view and the message
