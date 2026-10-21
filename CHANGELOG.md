@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-alpha.1] - 2026-10-21
+
 ### Added
 - Modern rules (F10, *Modern rules*; `[rules]` in themepark.ini; `--rules`):
   fixes to how the 1994 game plays, each off until turned on. In a network
@@ -43,6 +45,13 @@ versions follow [SemVer](https://semver.org/).
 - The attract demo ended the moment it started when parks open in 640x480
   (the default): the demo centring the pointer counted as the player moving
   it.
+- Setup stopped at the build when an earlier setup had left an older
+  pcrecomp in `../tools` (#33): it now checks for the newest toolkit feature
+  the game uses, and fetches a current pcrecomp into `../pcrecomp` (leaving
+  the old one alone), or updates an old `../pcrecomp`.
+- The Windows installer carries version information and a manifest, and the
+  release lists SHA-256 checksums, which should make antivirus false
+  positives less likely (#33; it is still not code-signed).
 
 ## [0.2.0-alpha.1] - 2026-10-20
 
