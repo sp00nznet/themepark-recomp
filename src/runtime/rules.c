@@ -68,6 +68,8 @@ const rule_t rule_list[] = {
       "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
     { RULE_LIGHTS, "lights", "Lamps light up in the dark",
       "When rain and storms darken the park, lamp posts glow; the darker, the brighter. Only the picture changes (#18)." },
+    { RULE_ESC, "esc", "Esc closes windows",
+      "Esc closes the open window, as the tick does: status, finance and the rest, not only the staff window (#43)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -811,8 +813,18 @@ static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a) {
     return ret;
 }
 
+/* The buttons' actions (0x4A7537, 6 bytes each: two sprites, a hotkey, a
+ * kind). A key press runs the action whose hotkey it is; the staff window's
+ * close has Esc (1), the other windows' ticks have none (0xFF). */
+static const uint8_t esc_actions[] = { 0x03, 0x18 };
+static void esc_keys(void) {
+    for (unsigned i = 0; i < sizeof esc_actions; i++)
+        M8(0x4A7537 + esc_actions[i] * 6 + 4) = (tp_rules & RULE_ESC) ? 0x01 : 0xFF;
+}
+
 void rules_frame(void) {   /* game.c, between frames on the game thread */
     lights_frame();
+    esc_keys();
     for (int i = 0; i < ncalls; i++) {
         uint32_t r = guest_call(calls[i].addr, (int)calls[i].n, calls[i].a);
         fprintf(stderr, "[rules] call %08x -> %08x\n", calls[i].addr, r);

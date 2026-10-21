@@ -70,6 +70,47 @@ void sos_digi_init_driver(void (*lifted)(void)) {
 
 static int voice_of[256];       /* the game's sample id -> mixer voice */
 
+/* Effects the player turned off (F10, Sound effects; [sounds] in
+ * themepark.ini, #41), by their names in the SNDS banks. */
+const effect_group effect_groups[] = {
+    { "sales", "Sales (the till)", "CASH" },
+    { "boos", "Booing", "GRPBOO GRPBOO1 GRPBOO2" },
+    { "sick", "Being sick", "SICK" },
+    { "thugs", "Thugs' motorbikes", "THUGBKE" },
+    { "crying", "Crying", "CRY" },
+    { "cheers", "Cheering", "HURRAY HURRAY1 HURRAY2" },
+    { "laughs", "Laughing and giggling", "LAUGH GIGGLE" },
+    { "screams", "Screams on rides", "CSTSCRM" },
+    { "toilets", "Toilets", "FLUSH" },
+    { "thunder", "Thunder", "THUNDER" },
+    { "buttons", "Buttons", "BUTTON BUTTON2 BUTTON3 BUTTON4 BUTTON5 BUTTON6" },
+};
+const int effect_group_count = sizeof effect_groups / sizeof effect_groups[0];
+uint32_t effects_muted;
+
+void effects_load(const char* ini) {
+    effects_muted = 0;
+    for (int i = 0; i < effect_group_count; i++)
+        if (GetPrivateProfileIntA("sounds", effect_groups[i].key, 1, ini) == 0) effects_muted |= 1u << i;
+}
+
+void effects_save(const char* ini) {
+    for (int i = 0; i < effect_group_count; i++)
+        WritePrivateProfileStringA("sounds", effect_groups[i].key, effects_muted >> i & 1 ? "0" : "1", ini);
+}
+
+static int effect_muted(const uint8_t* data, uint32_t len) {
+    if (!effects_muted) return 0;
+    const char* name = music_effect_name(data, len);
+    size_t n = strlen(name);
+    for (int i = 0; n && i < effect_group_count; i++) {
+        if (!(effects_muted >> i & 1)) continue;
+        for (const char* w = effect_groups[i].names; (w = strstr(w, name)); w += n)
+            if ((w == effect_groups[i].names || w[-1] == ' ') && (w[n] == ' ' || !w[n])) return 1;
+    }
+    return 0;
+}
+
 /* sosDIGIStartSample(h, far *sample) -> sample id. The struct (0x4AA729):
  * +0 data, +8 length, +0xC loop count (0xFFFF for ever), +0x10 volume
  * (0x7FFF full), +0x12 sample id, +0x1C flags (0x4000 looped). */
@@ -81,9 +122,10 @@ void sos_digi_start(void (*lifted)(void)) {
     int variant = M8(sound_variant_va);
     int rate = variant == 2 ? 44100 : variant == 1 ? 22050 : 11025;
     int loop = !(flags & 0x4000) ? 0 : loops == 0xFFFF ? -1 : loops > 0 ? loops - 1 : 0;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d ret %08X\n", frame_no / 70.0, id, data, len, loops, flags, vol, M32(g_esp));
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d ret %08X %s%s\n", frame_no / 70.0, id, data, len, loops, flags, vol, M32(g_esp),
+                                     music_effect_name(dos32_mem(data), len), effect_muted(dos32_mem(data), len) ? " (off)" : "");
     audio_stop(voice_of[id]);
-    voice_of[id] = sound_mute ? 0 : audio_play(dos32_mem(data), len, variant == 2 ? 16 : 8, variant == 2, rate,
+    voice_of[id] = sound_mute || effect_muted(dos32_mem(data), len) ? 0 : audio_play(dos32_mem(data), len, variant == 2 ? 16 : 8, variant == 2, rate,
                                                 vol >> 8, 64, loop);
     ret(id);
 }

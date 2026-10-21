@@ -28,6 +28,7 @@
 #include "present.h"
 #include "pad.h"
 #include "music.h"
+#include "audio.h"
 #include "net.h"
 #include "rules.h"
 
@@ -409,7 +410,7 @@ static void network_command(int cmd) {
 /* F10, or a right-click on the bars: every setting in one native menu. */
 static void settings_menu(int sx, int sy) {
     enum { ID_SCALE = 100, ID_SPEED = 200, ID_VIVID = 300, ID_FULL, ID_MUTE, ID_HIRES,
-           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900, ID_RULES = 1000, ID_LANG = 1100 };
+           ID_SIZE = 400, ID_SAVE = 500, ID_LOAD = 600, ID_MUSIC = 800, ID_RES = 900, ID_RULES = 1000, ID_LANG = 1100, ID_FX = 1200 };
     static const char* scale_labels[SCALE_COUNT] = {
         "Sharp (crisp pixels, smooth edges)", "Smooth", "CRT", "Nearest", "Integer (pixels doubled up)" };
     capture(0);
@@ -427,6 +428,8 @@ static void settings_menu(int sx, int sy) {
         AppendMenuA(ru, MF_STRING | (tp_rules & rule_list[i].bit ? MF_CHECKED : 0) | (net_n ? MF_GRAYED : 0),
                     ID_RULES + i, rule_list[i].label);
     AppendMenuA(ru, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(ru, MF_STRING | (net_n ? MF_GRAYED : 0), ID_RULES + RULE_MAX, "Turn all on");
+    AppendMenuA(ru, MF_STRING | (net_n ? MF_GRAYED : 0), ID_RULES + RULE_MAX + 1, "Turn all off");
     AppendMenuA(ru, MF_STRING | MF_GRAYED, 0, net_n ? "The host's rules, for the whole game" :
                 "Off: the game as in 1994 (docs\\rules.md)");
     char res_ini[16];
@@ -482,6 +485,10 @@ static void settings_menu(int sx, int sy) {
                 "Open parks in 640x480 (R switches in a park)");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)rs, "Park resolution");
     AppendMenuA(m, MF_POPUP, (UINT_PTR)la, "Language");
+    HMENU fx = CreatePopupMenu();   /* effects to turn off (#41) */
+    for (int i = 0; i < effect_group_count; i++)
+        AppendMenuA(fx, MF_STRING | (effects_muted >> i & 1 ? 0 : MF_CHECKED), ID_FX + i, effect_groups[i].label);
+    AppendMenuA(m, MF_POPUP, (UINT_PTR)fx, "Sound effects");
     AppendMenuA(m, MF_SEPARATOR, 0, NULL);
     AppendMenuA(m, MF_POPUP, (UINT_PTR)ru, "Modern rules");
     int cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, 0, wnd, NULL);
@@ -512,6 +519,10 @@ static void settings_menu(int sx, int sy) {
         state_note_until = GetTickCount() + 4000;
         if (!g_present.fullscreen && ch >= 480) size_window(ch / 240);   /* the same scale, the new shape */
     }
+    else if (cmd >= ID_FX && cmd < ID_FX + effect_group_count) {
+        effects_muted ^= 1u << (cmd - ID_FX);
+        effects_save(ini_path);
+    }
     else if (cmd >= ID_LANG && cmd < ID_LANG + 5) {
         char v[4] = { (char)('0' + cmd - ID_LANG), 0 };
         WritePrivateProfileStringA("game", "lang", v, ini_path);
@@ -520,6 +531,11 @@ static void settings_menu(int sx, int sy) {
     }
     else if (cmd >= ID_RULES && cmd < ID_RULES + rule_count && !net_n) {
         tp_rules ^= rule_list[cmd - ID_RULES].bit;
+        rules_save(ini_path);
+    }
+    else if ((cmd == ID_RULES + RULE_MAX || cmd == ID_RULES + RULE_MAX + 1) && !net_n) {   /* all on, all off (#43) */
+        tp_rules = 0;
+        if (cmd == ID_RULES + RULE_MAX) for (int i = 0; i < rule_count; i++) tp_rules |= rule_list[i].bit;
         rules_save(ini_path);
     }
     else if (cmd >= ID_MUSIC && cmd <= ID_MUSIC + npacks) {

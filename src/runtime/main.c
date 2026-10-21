@@ -280,6 +280,7 @@ int main(int argc, char** argv) {
         GetPrivateProfileStringA("game", "lang", "0", v, sizeof v, ini);   /* F10, Language */
         if (v[0] >= '0' && v[0] <= '4') { char* l = strstr(args, "-l"); if (l) l[2] = v[0]; }
         rules_load(ini);
+        effects_load(ini);
     }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--headless")) headless = 1;

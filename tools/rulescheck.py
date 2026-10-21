@@ -165,6 +165,12 @@ def lights(exe):
                  (100.0 * sums['lights'] / max(1, sums['none']) - 100))
 
 
+def esc(exe):
+    # the status window's tick (action 3, hotkey at 0x4A7537 + 3*6 + 4): Esc with the rule
+    key = {r: dump_bytes(exe, r, 20, [], 20)[0x4A7537 + 3 * 6 + 4 - 0x400000] for r in ('none', 'esc')}
+    return check(key == {'none': 0xFF, 'esc': 0x01}, 'esc: the windows\' ticks answer Esc')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -175,7 +181,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe)])
+              lights(exe), esc(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

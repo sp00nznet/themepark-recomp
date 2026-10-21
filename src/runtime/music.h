@@ -17,6 +17,9 @@ int music_packs(char (*names)[64], int max);
  * game's banks (RIDE1, FANFARE, INTRO3...), or "" if it is not one of them. */
 const char* music_song_name(const uint8_t* hmp);
 
+/* The same for a sound effect's sample data (sound.c's mutes, #41). */
+const char* music_effect_name(const uint8_t* data, uint32_t len);
+
 /* The current pack's recording of that song, decoded to 16-bit PCM
  * (malloc'd, `ch` interleaved channels). NULL if the pack has none. */
 int16_t* music_load(const char* song, uint32_t* frames, int* ch, int* rate);

@@ -9,7 +9,8 @@ recomp keeps the game as Bullfrog shipped it, and offers changes to these as
 ## Turning them on
 
 F10 (or a right-click on the bars), *Modern rules*, then tick the ones you
-want. They take effect at once and are kept in `themepark.ini`:
+want, or *Turn all on* / *Turn all off*. They take effect at once and are
+kept in `themepark.ini`:
 
 ```ini
 [rules]
@@ -20,6 +21,7 @@ entertainers=1
 handymen=1
 building=1
 lights=1
+esc=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -185,6 +187,16 @@ glow through it.
 
 There is no night in the game, only weather; each day passes in under a
 second, too fast for a day and night clock.
+
+### Esc closes windows (`esc`, issue #43)
+
+**In 1994:** Esc closes the staff window and a few others; the status
+window, the finance window and most of the rest only close with their tick.
+
+**With the rule:** Esc closes those too. Each of the game's button actions
+has a hotkey (the table at 0x4A7537, 6 bytes an action: two sprites, the
+key, a kind); the windows' ticks (actions 3 and 0x18) have none, and the
+rule gives them Esc.
 
 ## Asked for, and not possible
 

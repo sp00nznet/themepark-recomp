@@ -60,6 +60,24 @@ rides) replayed its first 1.5 s for ever and never reported itself finished
 (issue #1). Headless runs mix on the 70 Hz frame clock instead, so `--record`
 carries the effects.
 
+### Turning effects off (#41)
+
+F10, *Sound effects* (on Linux, *More*, *Sound effects*) turns groups of
+effects on and off: sales (CASH), booing (GRPBOO*), being sick (SICK),
+thugs' motorbikes (THUGBKE), crying, cheering, laughing, screams on rides,
+toilets, thunder and buttons. They are kept in `themepark.ini`:
+
+```ini
+[sounds]
+sales=0
+sick=0
+```
+
+The game only hands the mixer a pointer to the sample, so `sound.c` names it
+by matching its first 64 bytes against the SNDS banks (`music_effect_name`,
+which also looks up songs), and an effect that is off is not played. The game
+sees it start and finish as usual. `TP_SNDLOG=1` prints each effect's name.
+
 ## Music
 
 `MUSICn-v.TAB` / `.DAT` hold HMP songs (`HMIMIDIP`): track count at +0x30,

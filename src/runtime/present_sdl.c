@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include "pad.h"
 #include "music.h"
+#include "audio.h"
 
 present_settings g_present = { SCALE_INTEGER, 0, 0, 1, 0 };
 
@@ -365,11 +366,28 @@ static void network_menu(void) {
     else if (k == 5 && net_me == 0) net_rules_grant(j, -10000);
 }
 
+/* Sound effects, each on or off (#41). */
+static void effects_menu(void) {
+    for (;;) {
+        char t[32][64];
+        const char* l[33];
+        for (int i = 0; i < effect_group_count && i < 32; i++) {
+            snprintf(t[i], sizeof t[i], "%s %s", effects_muted >> i & 1 ? "[off]" : "[on] ", effect_groups[i].label);
+            l[i] = t[i];
+        }
+        l[effect_group_count] = "Close";
+        int c = ask("Sound effects: pick one to turn it on or off.", l, effect_group_count + 1);
+        if (c < 0 || c >= effect_group_count) return;
+        effects_muted ^= 1u << c;
+        effects_save(ini_path);
+    }
+}
+
 /* Modern rules (rules.c): each on or off; the host's in a network game. */
 static void rules_menu(void) {
     for (;;) {
-        char text[1600], t[RULE_MAX][96];
-        const char* l[RULE_MAX + 1];
+        char text[2400], t[RULE_MAX][96];
+        const char* l[RULE_MAX + 3];
         int n = snprintf(text, sizeof text, "%s", net_n ? "In a network game everyone plays by the host's rules.\n\n" :
                          "Changes to how the 1994 game behaves, each off unless you turn it on.\n\n");
         for (int i = 0; i < rule_count && n < (int)sizeof text; i++) {
@@ -378,10 +396,14 @@ static void rules_menu(void) {
             snprintf(t[i], sizeof t[i], "%s: %s", on ? "Turn off" : "Turn on", rule_list[i].label);
             l[i] = t[i];
         }
-        l[rule_count] = "Close";
-        int c = net_n ? (ask(text, &l[rule_count], 1), -1) : ask(text, l, rule_count + 1);
-        if (c < 0 || c >= rule_count) return;
-        tp_rules ^= rule_list[c].bit;
+        l[rule_count] = "Turn all on"; l[rule_count + 1] = "Turn all off"; l[rule_count + 2] = "Close";
+        int c = net_n ? (ask(text, &l[rule_count + 2], 1), -1) : ask(text, l, rule_count + 3);
+        if (c < 0 || c >= rule_count + 2) return;
+        if (c < rule_count) tp_rules ^= rule_list[c].bit;
+        else {   /* all on, all off (#43) */
+            tp_rules = 0;
+            if (c == rule_count) for (int i = 0; i < rule_count; i++) tp_rules |= rule_list[i].bit;
+        }
         rules_save(ini_path);
     }
 }
@@ -458,8 +480,8 @@ static void settings_menu(void) {
         break; }
     case 6: {
         const char* l[] = { g_present.look ? "Natural colour" : "Vivid colour", muted ? "Sound on" : "Mute",
-                            hires ? "Parks in 320x200" : "Parks in 640x480", "Park resolution", "Language", "Cancel" };
-        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 6);
+                            hires ? "Parks in 320x200" : "Parks in 640x480", "Park resolution", "Language", "Sound effects", "Cancel" };
+        int c = ask("Colour, sound, and the park's resolution when one opens (R switches in a park).", l, 7);
         if (c == 0) g_present.look ^= 1;
         else if (c == 1) { muted ^= 1; sound_set_mute(muted); WritePrivateProfileStringA("sound", "mute", muted ? "1" : "0", ini_path); }
         else if (c == 2) WritePrivateProfileStringA("game", "hires", hires ? "0" : "1", ini_path);
@@ -469,6 +491,7 @@ static void settings_menu(void) {
             int k = ask("The game's language, from the next start.", g, 6);
             if (k >= 0 && k < 5) { char v[4] = { (char)('0' + k), 0 }; WritePrivateProfileStringA("game", "lang", v, ini_path); }
         }
+        else if (c == 5) effects_menu();
         break; }
     case 7: rules_menu(); return;
     default: return;

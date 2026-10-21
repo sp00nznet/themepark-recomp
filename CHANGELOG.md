@@ -10,7 +10,17 @@ versions follow [SemVer](https://semver.org/).
   Español, Français), from the next start; `[game] lang=`. Every CD pressing
   checked on archive.org has the same MAIN.EXE and data as the supported
   1994 CD (README: which copies work).
+- F10, *Sound effects* (#41): sales, booing, being sick, thugs' motorbikes,
+  crying, cheering, laughing, screams, toilets, thunder and buttons, each on
+  or off; `[sounds]` in themepark.ini. The effects are named from the game's
+  SNDS banks.
+- Modern rules: *Turn all on* and *Turn all off* (#43), and **Esc closes
+  windows** (`esc`, #43): the status, finance and other windows close on Esc
+  as the staff window does.
+- A network game started from F10 skips the intro on the restart (#37).
 ### Fixed
+- Setup builds every time (#37, #10): run again after an update, it kept the
+  old lifted C and the old exe, so updates never reached the game.
 - Wider parks (#11): the stock market, research, the bank and the game's
   other full screens were sheared across the screen; they draw 640 wide at
   the left again. The interface no longer turns red: the game's bank switch
