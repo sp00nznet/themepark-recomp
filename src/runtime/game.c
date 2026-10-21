@@ -159,6 +159,16 @@ void mouse_setup(void (*lifted)(void)) {
     mouse_setup_allocs = -1;
 }
 
+/* The game putting the pointer somewhere (0x401191) is not the player moving
+ * it: the idle check (0x40111F) remembers the new place too. Otherwise the
+ * attract demo, which centres the pointer as its park opens in 640x480 (our
+ * default), took that for a move and ended at once. */
+void set_cursor(void (*lifted)(void)) {
+    lifted();
+    *(uint16_t*)dos32_mem(0x4C660A) = *(uint16_t*)dos32_mem(0x4AECAC);
+    *(uint16_t*)dos32_mem(0x4C660C) = *(uint16_t*)dos32_mem(0x4AECAE);
+}
+
 void pool_alloc(void (*lifted)(void)) {   /* 0x46E8D0(bytes) */
     if (mouse_setup_allocs >= 0 && mouse_setup_allocs < 3 && MEM32(g_esp + 4) == 0x1000) {
         uint32_t had = MEM32(mouse_bufs[mouse_setup_allocs++]);

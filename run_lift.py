@@ -67,6 +67,8 @@ OVERRIDES = {
     0x00472950: 'hold_back_memory',
     # The pointer's buffers, taken once and not again at every resolution change (#6).
     0x0046DF44: 'mouse_setup', 0x0046E8D0: 'pool_alloc',
+    # The game moving the pointer is not the player: the attract demo kept ending.
+    0x00401191: 'set_cursor',
     # Custom resolutions (#11): the 640x480 mode set and the VESA call under it.
     0x0046ECF0: 'hires_mode', 0x0046EC50: 'lores_mode', 0x0046E658: 'vesa_set',
     0x0044F63F: 'resource_load', 0x00444ED6: 'screen_update', 0x0043DFAC: 'park_zones',
