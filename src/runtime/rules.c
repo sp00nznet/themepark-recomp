@@ -48,6 +48,8 @@ const rule_t rule_list[] = {
       "A patrolling guard heads for any thug within 12 tiles, not only one straight ahead on the path (#8)." },
     { RULE_STUCK, "unstick", "Stuck guests find their way out",
       "A guest stuck for a few seconds is moved out of the pocket it is fenced into, or along its way to the gate (#17)." },
+    { RULE_ADVISOR, "advisor", "The advisor keeps advising",
+      "Advice does not fade away over a long game, and the advisor warns of the year end and says what research has found (#16)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -193,6 +195,101 @@ void guest_stuck(void (*lifted)(void)) {
     M16(p + 0xA) = M16(M32(FRAMES) + 2 * (M16(0x4A49F4 + M8(p + 0x59) * 0x24) + M8(p + 0x12)));
     rlog("stuck guest %u at %d,%d moved to %d,%d (%s)", me, x, y, to % 64, to / 64,
          dist[here] > 0 ? "along the way out" : "out of a pocket");
+}
+
+/* ---- the advisor (#16) -------------------------------------------------- */
+/* The advisor (0x44CBDB, every frame in a park) walks a table of 34 pieces of
+ * advice at 0x4AA144, 12 bytes each: +0 w message (text 665 + n), +3 w how
+ * long to wait between showings, +5 w how long to show it, +7 b times shown,
+ * +8 d when last shown (the calendar, 0x4C3AFC: 1000 a month). The wait grows
+ * with the times shown, which nothing resets, not even a new game: an hour in,
+ * most advice has gone quiet. With the rule, the count stops at ADVICE_CAP, so
+ * advice comes back about monthly, and the advisor says two new things when it
+ * has nothing else to say: that the year ends next month (mid November), and
+ * what the researchers have just finished. The game's own message area shows
+ * them (0x44E2C5, given the text). This is all on the screen of this machine
+ * only; nothing the simulation reads changes. */
+#define ADVICE      0x4AA144
+#define ADVICE_CAP  4
+#define ADVICE_NOW  0x4C661C  /* w: the entry being shown, -1 none */
+#define CALENDAR    0x4C3AFC  /* d: months * 1000 */
+#define ADVICE_TEXT 0x4BE7D0  /* the advisor's own text buffer */
+#define SAY_FOR     350       /* calendar units a message stays (about 5 s) */
+#define PRICE_TOTAL 1600      /* what the shop-price advice may see of park +0xB6 */
+
+static struct { char text[160]; uint32_t by; } say_queue[8];   /* by: too late after this */
+static int say_n;
+static uint32_t say_until;
+
+static void say(const char* text, uint32_t by) {
+    if (say_n < 8) { snprintf(say_queue[say_n].text, sizeof say_queue[0].text, "%s", text); say_queue[say_n++].by = by; }
+    rlog("advisor: %s", text);
+}
+
+static void advisor_news(void) {
+    uint32_t now = M32(CALENDAR);
+    static uint32_t warned_year = 0xFFFFFFFF;
+    if (now % 12000 >= 10500 && now % 12000 < 11000 && warned_year != now / 12000) {
+        warned_year = now / 12000;
+        say("THE YEAR ENDS NEXT MONTH. YOUR ACCOUNTS AND SHARE VALUE WILL BE DRAWN UP AT THE END OF DECEMBER.",
+            now - now % 12000 + 11300);   /* not after early December */
+    }
+    /* Research: an item is new when it becomes available and not yet looked at
+     * (flag bits 1 and 2, research_notes). Each is told once a session. */
+    static const struct { uint32_t base, stride, flag; int count; const char* what; } t[] = {
+        { 0x4BCED0, 0xC8, 0xC5, 29, "RIDE" }, { 0x4C3C62, 0x6B, 0x66, 17, "SHOP" } };
+    static uint8_t told[2][32], primed;
+    for (int k = 0; k < 2; k++)
+        for (int i = 0; i < t[k].count; i++) {
+            uint32_t r = t[k].base + (uint32_t)i * t[k].stride;
+            int fresh = (M8(r + t[k].flag) & 3) == 3;
+            if (fresh && !told[k][i] && primed) {
+                char line[160];
+                snprintf(line, sizeof line, "YOUR RESEARCHERS HAVE COME UP WITH A NEW %s: THE %.20s. IT IS IN THE BUILD MENU NOW.",
+                         t[k].what, (const char*)dos32_mem(r));
+                say(line, now + 3000);
+            }
+            told[k][i] = (uint8_t)fresh;
+        }
+    primed = 1;               /* what was new before this session is not news */
+}
+
+void advisor(void (*lifted)(void)) {
+    /* As 0x44CBDB starts: the advisor turned off (0x4C778D), or busy with
+     * something of its own (0x4AA0F8 >= 0). */
+    if (!(tp_rules & RULE_ADVISOR) || !M8(0x4C778D) || (int8_t)M8(0x4AA0F8) >= 0) { lifted(); return; }
+    for (uint32_t e = ADVICE; M16(e); e += 12)
+        if (M8(e + 7) > ADVICE_CAP) M8(e + 7) = ADVICE_CAP;
+    advisor_news();
+    uint32_t now = M32(CALENDAR);
+    if (say_until && now < say_until && now + SAY_FOR + 1 > say_until) {   /* ours, on screen */
+        uint32_t a = ADVICE_TEXT;
+        guest_call(0x44E2C5, 1, &a);
+        return;
+    }
+    say_until = 0;
+    /* Shop prices (0x44CFA4): the "right" price is the base price times
+     * (100 + park +6 + (shop's two bytes * 8 + park +0xB6 / 16) / 2) / 100, and
+     * +0xB6 is a running total that only grows (about 200 a second), so an hour
+     * in it calls for prices twenty times the base. While the advisor thinks it
+     * sees at most PRICE_TOTAL (about twice the base at most); then the real
+     * value is put back. */
+    uint32_t park = 0x4BF1E0 + (uint32_t)M16(M32(0x4C3B00) + M8(M32(0x4C3814) + 0x40) * 0x222u + 2) * 0x250u;
+    uint32_t total = M32(park + 0xB6);
+    if (total > PRICE_TOTAL) M32(park + 0xB6) = PRICE_TOTAL;
+    while (say_n && say_queue[0].by < now) memmove(say_queue, say_queue + 1, sizeof say_queue[0] * (size_t)--say_n);
+    if (say_n && (int16_t)M16(ADVICE_NOW) < 0) {     /* the advisor has nothing to say: ours */
+        snprintf((char*)dos32_mem(ADVICE_TEXT), 160, "%s", say_queue[0].text);
+        memmove(say_queue, say_queue + 1, sizeof say_queue[0] * (size_t)--say_n);
+        say_until = now + SAY_FOR;
+        uint32_t a = ADVICE_TEXT;
+        guest_call(0x44E2C5, 1, &a);
+    }
+    else lifted();
+    M32(park + 0xB6) = total;
+    static int16_t shown = -1;
+    if ((int16_t)M16(ADVICE_NOW) != shown && (shown = (int16_t)M16(ADVICE_NOW)) >= 0)
+        rlog("advisor (game): %.150s", (const char*)dos32_mem(ADVICE_TEXT));
 }
 
 /* ---- tests -------------------------------------------------------------- */
