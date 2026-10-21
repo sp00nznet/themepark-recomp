@@ -76,7 +76,8 @@ yet. Sound effects and music play through the host (HMI SOS replaced;
 | Settings menu (F10) | scaling, colour, speed, fullscreen, mute, 640x480 default |
 | 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
 | Wider parks | the park at any width from 640 to 1920 at 480 high (16:9 is 856x480): F10, *Park resolution*, or `--res`; the panel stays 640 wide ([docs/resolutions.md](docs/resolutions.md)) |
-| Modern rules | fixes to the 1994 game's staff, guests and building, each off until ticked in F10, *Modern rules*: guards that chase thugs, guests that get unstuck, an advisor that keeps advising, entertainers that entertain, handymen that stay on their paths, fences under track, lamps and fountains on paths, lamps that light up in storms ([docs/rules.md](docs/rules.md)) |
+| Sound effects | each group on or off in F10, *Sound effects*: sales, booing, being sick, thugs' motorbikes and more ([docs/sound.md](docs/sound.md)) |
+| Modern rules | fixes to the 1994 game's staff, guests and building, each off until ticked in F10, *Modern rules*: guards that chase thugs, guests that get unstuck, an advisor that keeps advising, entertainers that entertain, handymen that stay on their paths, fences under track, lamps and fountains on paths, lamps that light up in storms, Esc that closes windows ([docs/rules.md](docs/rules.md)) |
 | Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
 | Music | the game's General MIDI songs on the Windows synth, or a music pack of recordings (F10, *Music*; [music/README.md](music/README.md)) |
 | Save states | 9 slots in the settings menu (F10) |

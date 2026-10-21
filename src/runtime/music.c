@@ -81,7 +81,7 @@ int music_packs(char (*names)[64], int max) {
 /* ---- naming the song --------------------------------------------------------- */
 
 typedef struct { char name[19]; uint8_t* data; uint32_t len; } bank_song;
-static bank_song known[256];
+static bank_song known[512];   /* MUSIC songs, then SNDS effects */
 static int nknown = -1;
 
 static uint8_t* read_file(const char* dir, const char* name, uint32_t* len) {
@@ -107,15 +107,17 @@ static uint8_t* read_file(const char* dir, const char* name, uint32_t* len) {
 
 static void load_banks(void) {
     nknown = 0;
+    for (int kind = 0; kind < 2; kind++)
     for (int bank = 0; bank < 2; bank++)
         for (int var = 0; var < 3; var++) {
             char tn[32], dn[32];
             uint32_t tl = 0, dl = 0;
-            snprintf(tn, sizeof tn, "MUSIC%d-%d.TAB", bank, var);
-            snprintf(dn, sizeof dn, "MUSIC%d-%d.DAT", bank, var);
+            const char* k = kind ? "SNDS" : "MUSIC";
+            snprintf(tn, sizeof tn, "%s%d-%d.TAB", k, bank, var);
+            snprintf(dn, sizeof dn, "%s%d-%d.DAT", k, bank, var);
             uint8_t *tab = read_file(data_dir, tn, &tl), *dat = tab ? read_file(data_dir, dn, &dl) : NULL;
             /* ponytail: the banks stay loaded (a few hundred KB) for the run */
-            for (uint32_t e = 32; dat && e + 32 <= tl && nknown < 256; e += 32) {
+            for (uint32_t e = kind ? 0 : 32; dat && e + 32 <= tl && nknown < 512; e += 32) {
                 uint32_t off = *(uint32_t*)(tab + e + 0x12), len = *(uint32_t*)(tab + e + 0x1A);
                 if (!len || off + len > dl) continue;
                 bank_song* s = &known[nknown++];
@@ -134,6 +136,18 @@ const char* music_song_name(const uint8_t* hmp) {
     if (nknown < 0) load_banks();
     for (int i = 0; i < nknown; i++)
         if (!memcmp(hmp, known[i].data, known[i].len)) return known[i].name;
+    return "";
+}
+
+/* The effect whose sample data is at `data` (`len` bytes): its name in the
+ * SNDS banks (CASH, SICK, GRPBOO1...), or "". The game may skip the
+ * sample's 16-byte header, so both starts are tried; 64 bytes decide. */
+const char* music_effect_name(const uint8_t* data, uint32_t len) {
+    if (nknown < 0) load_banks();
+    uint32_t n = len < 64 ? len : 64;
+    for (int i = 0; i < nknown; i++)
+        for (uint32_t skip = 0; skip <= 16; skip += 16)
+            if (known[i].len >= n + skip && !memcmp(data, known[i].data + skip, n)) return known[i].name;
     return "";
 }
 

@@ -23,3 +23,11 @@ void audio_master(int vol);
 
 /* Called with every mixed block (for capture); may be NULL. */
 extern void (*audio_tap)(const int16_t* stereo, int frames);
+
+/* Sound effects the player can turn off (sound.c, #41). */
+typedef struct { const char *key, *label, *names; } effect_group;
+extern const effect_group effect_groups[];
+extern const int effect_group_count;
+extern uint32_t effects_muted;   /* bit i: effect_groups[i] is off */
+void effects_load(const char* ini);
+void effects_save(const char* ini);
