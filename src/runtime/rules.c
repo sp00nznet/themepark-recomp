@@ -40,16 +40,31 @@
 #define REC        0xC8
 #define STAFF_TABLE 0x4C35C0  /* 0x36 a job */
 #define FRAMES     0x4C3B38   /* sprite frame table */
+#define TILES      0x4C3B08   /* 64x64 tiles of 4 bytes: +0 w first person on it, +2 b type */
+#define TILE_FLAGS 0x4A44D9   /* per tile type, 4 bytes: +0 w flags */
+#define TICKS      0x4C3AF8   /* the simulation's tick count */
+
+static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a);
 
 uint32_t tp_rules;
 
 const rule_t rule_list[] = {
     { RULE_GUARDS, "guards", "Guards go after thugs nearby",
-      "A patrolling guard heads for any thug within 12 tiles, not only one straight ahead on the path (#8)." },
+      "A patrolling guard heads for any thug within 12 tiles, not only one straight ahead on the path, "
+      "and a thug whose guard was moved or fired is let go instead of pacing round her for ever (#8, #29)." },
     { RULE_STUCK, "unstick", "Stuck guests find their way out",
       "A guest stuck for a few seconds is moved out of the pocket it is fenced into, or along its way to the gate (#17)." },
     { RULE_ADVISOR, "advisor", "The advisor keeps advising",
       "Advice does not fade away over a long game, and the advisor warns of the year end and says what research has found (#16)." },
+    { RULE_ENTERTAIN, "entertainers", "Entertainers entertain",
+      "No flashes between performances or flicker when fully trained, the panel counts the people entertained and made happy, "
+      "and staff keep their training speed when moved (#29)." },
+    { RULE_HANDYMEN, "handymen", "Handymen stay on the job",
+      "Back from a strike or off the paths, a handyman goes to the nearest path (and his patrol) instead of mowing far away, "
+      "and patrols take the shortest way between waypoints, however many (#7)." },
+    { RULE_BUILD, "building", "More room to build",
+      "Hedges, walls and fences go under raised track, lamp posts go on paths, and track still builds in a full park "
+      "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -87,7 +102,6 @@ static void rlog(const char* fmt, ...) {
  * walk-to-a-tile (state 0x36), as when it sees one itself. */
 #define GUARD_RANGE 12
 #define GUARD_EVERY 25        /* ticks between looks */
-#define TICKS 0x4C3AF8        /* the simulation's tick count */
 
 static int free_thug(uint32_t p) {   /* a thug a guard may take: as 0x42436C tests */
     uint8_t s = M8(p + 0xC);
@@ -118,6 +132,289 @@ void guard_patrol(void (*lifted)(void)) {
          (thug - M32(PEOPLE)) / REC, M8(thug + 7), M8(thug + 9));
 }
 
+/* A caught thug (state 8, 0x43D88D) follows the guard in its +0x61 until that
+ * guard reaches the gate (state 0x38) and throws it out; nothing else lets it
+ * go, and guards do not catch a thug already caught. So a guard picked up and
+ * dropped elsewhere leaves her thug pacing round her for good, and a guard
+ * fired or quitting leaves it frozen (her record is cleared: it follows a
+ * speed of 0). With the rule, a thug whose guard is no longer walking it out
+ * is let go (state 3, wandering), and a guard can catch it again (#29). */
+static int escorting(uint32_t thug, uint32_t g) {
+    if (M8(g + 4) != 8 || M8(g + 0x59) != 8) return 0;
+    if (!(M8(g + 0xC) == 0x38 || (M8(g + 0xC) == 0x36 && M8(g + 0xD) == 0x38))) return 0;
+    uint32_t want = (thug - M32(PEOPLE)) / REC;
+    uint16_t i = M16(g + 0x1E);
+    for (int hops = 0; i && hops < 16; hops++) {   /* the guard's chain of thugs, +0x1E each */
+        if (i == want) return 1;
+        i = M16(M32(PEOPLE) + i * REC + 0x1E);
+    }
+    return 0;
+}
+
+void thug_caught(void (*lifted)(void)) {
+    uint32_t t = M32(g_esp + 4);
+    if (tp_rules & RULE_GUARDS) {
+        uint16_t gi = M16(t + 0x61);
+        uint32_t g = M32(PEOPLE) + gi * REC;
+        if (!gi || g >= M32(PEOPLE_END) || !escorting(t, g)) {
+            if (gi && g < M32(PEOPLE_END) && M8(g + 4) == 8 && M8(g + 0x59) == 8 && M8(g + 0xC) == 0x34)
+                M16(g + 0x1E) = 0;                     /* a guard back on patrol holds no one */
+            M8(t + 0xC) = 3;
+            M16(t + 0x14) = 0;
+            M8(t + 0x13) = 0x10;
+            M16(t + 0x1E) = 0;
+            rlog("thug %u let go: its guard %u is not walking it out", (t - M32(PEOPLE)) / REC, gi);
+            g_eax = 0;
+            g_esp += 4;                                /* return as its ret would */
+            return;
+        }
+    }
+    lifted();
+}
+
+/* ---- entertainers (#29) ------------------------------------------------- */
+/* An entertainer performs in place (state 2, 0x4226DA), walks (4, 0x422A06),
+ * or performs for one guest (6, 0x422BCF): every 16 ticks it cheers up the
+ * first guest on its target tile (+0x4D) no happier than the park's
+ * threshold. Three faults:
+ *  - when that guest has gone, it drops to state 2 for one tick (facing forced
+ *    round, a frame of another animation) before the next tick's look for
+ *    guests (0x422E81) sends it back to 6: a flash every 16 ticks;
+ *  - its PEOPLE ENTERTAINED count (+0x5A) misses most guests (it counts only
+ *    a guest in another column of tiles), and PEOPLE MADE HAPPY (+0x42) is
+ *    never written at all, so the panel shows 0;
+ *  - walking, every tile restarts the walk animation; fully trained (speed
+ *    0x80, a tile every 2 ticks) it never gets past the first frame and the
+ *    sprite flickers between facings.
+ * And picking staff up and dropping them (0x4248ED) sets their speed back to
+ * untrained until the next training step.
+ * With the rule: the look for guests happens at once instead of a tick later,
+ * each guest cheered counts, a guest cheered past the threshold counts as made
+ * happy, a walk keeps its animation going along a straight line, and a dropped
+ * member of staff keeps the speed its training gave. */
+#define THRESHOLD() ((int16_t)M16(0x4BF1E0 + M8(0x4C447D + M16(0x4C665C) * 0x6C2u) * 0x250u))
+#define JOB(p, off) M16(STAFF_TABLE + M8((p) + 0x59) * 0x36u + (off))
+
+static uint32_t first_on_tile(int tile, int16_t thr) {   /* the guest 0x422BCF serves */
+    if (tile < 0 || tile >= 4096) return 0;
+    uint16_t i = M16(M32(TILES) + 4u * (uint32_t)tile);
+    for (int hops = 0; i && hops < 64; hops++) {
+        uint32_t q = M32(PEOPLE) + i * REC;
+        if (M8(q + 4) == 2 && (int16_t)M16(q + 0x54) <= thr) return q;
+        i = M16(q + 2);
+    }
+    return 0;
+}
+
+void ent_perform(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4);
+    if (!(tp_rules & RULE_ENTERTAIN)) { lifted(); return; }
+    int16_t thr = THRESHOLD();
+    int serving = (int16_t)M16(p + 0x14) <= 1;
+    uint32_t guest = serving ? first_on_tile(M16(p + 0x4D), thr) : 0;
+    uint8_t counted = M8(p + 0x5A);
+    lifted();
+    if (counted == 255) M8(p + 0x5A) = 255;                         /* its own count wraps round */
+    if (M8(p + 0xC) == 6 && M16(p + 0x14) == 0x10 && guest) {      /* it cheered `guest` up */
+        if (M8(p + 0x5A) == counted && counted < 255) M8(p + 0x5A)++;
+        if ((int16_t)M16(guest + 0x54) > thr) M16(p + 0x42)++;
+    } else if (serving && M8(p + 0xC) == 2) {                       /* nobody left: look now */
+        uint32_t r = guest_call(0x422E81, 1, &p);
+        if ((int16_t)r >= 0 && (int16_t)r < 4) {
+            M8(p + 0x12) = (uint8_t)r;
+            M16(p + 0xA) = M16(M32(FRAMES) + 2 * (JOB(p, 0x28) + (uint32_t)r));
+        }
+    }
+}
+
+void ent_walk(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4);
+    if (!(tp_rules & RULE_ENTERTAIN)) { lifted(); return; }
+    uint16_t frame = M16(p + 0xA);
+    uint8_t facing = M8(p + 0x12);
+    lifted();
+    if (M8(p + 0xC) == 4 && M8(p + 0x12) == facing && M16(p + 0xA) != frame &&
+        M16(p + 0xA) == M16(M32(FRAMES) + 2 * (JOB(p, 0x26) + facing)))
+        M16(p + 0xA) = frame;                     /* a new tile the same way: the animation goes on */
+}
+
+void staff_drop(void (*lifted)(void)) {           /* 0x4248ED(tile, record index) */
+    uint32_t i = M32(g_esp + 8) & 0xFFFF, p = M32(PEOPLE) + i * REC;
+    lifted();
+    if ((tp_rules & RULE_ENTERTAIN) && i && p < M32(PEOPLE_END) && M8(p + 4) == 8)
+        M8(p + 0x13) = M8(STAFF_TABLE + M8(p + 0x59) * 0x36u + 0x31);   /* its trained speed */
+}
+
+/* ---- handymen (#7) ------------------------------------------------------ */
+/* A handyman's states (job 2): 0x16 decide by the tile (0x4517E0: on a path
+ * wander it, 0x18; on grass mow it, 0x1E; anywhere else walk to the lawn at
+ * 32,16 and mow that), 0x18 wander and sweep, 0x1A find the nearest path,
+ * 0x30 patrol: up to 8 waypoints (+0x9C, words; +0xAC the next), each leg by
+ * 0x453E5D, a greedy step and a 50-step wall-follow. Faults:
+ *  - after a strike (picketing at the gate, 0x3A..0x3E) he walks back and
+ *    takes up 0x16 where the walk ends: often grass, so he mows, patrol or not;
+ *  - off the paths on anything but grass he goes to mow 32,16, far away;
+ *  - a patrol leg the wall-follow cannot do is skipped, and setting a patrol
+ *    leaves the preview walk's wall-follow state behind (+5 bits 0x30), so the
+ *    patrol wanders off: with more than 4 waypoints, most of the time.
+ * With the rule: back from a strike, or off the paths, he goes to the nearest
+ * path (and from there his patrol, if he has one); a handyman with a patrol
+ * does not mow his way out of it; and each patrol leg takes the shortest way
+ * along the paths. A handyman dropped on a lawn with no patrol still mows it. */
+#define HANDY_PATH 0x1A       /* tile flags a handyman walks (0x4517E0) */
+
+static uint16_t tflags(int t) { return M16(TILE_FLAGS + 4 * M8(M32(TILES) + 4 * (uint32_t)t + 2)); }
+static int tile_of(uint32_t p) { return M8(p + 9) * 64 + M8(p + 7); }
+static int handyman(uint32_t p) { return M8(p + 4) == 8 && M8(p + 0x59) == 2; }
+
+void strike_return(void (*lifted)(void)) {   /* 0x42542D: state 0x3E, back from the picket line */
+    uint32_t p = M32(g_esp + 4);
+    lifted();
+    if (!(tp_rules & RULE_HANDYMEN) || !handyman(p) || M8(p + 0xC) == 0x3E) return;   /* still walking */
+    M8(p + 5) &= (uint8_t)~0x30;                  /* the walk's wall-follow state */
+    if (tflags(tile_of(p)) & HANDY_PATH) return;  /* on a path: wander, or patrol */
+    if (tile_of(p) == M16(p + 0x4D) && M16(p + 0x9C) == 0xFFFF) return;   /* back at his lawn: mow on */
+    M8(p + 0xC) = 0x1A;                           /* to the nearest path */
+    M8(p + 0xD) = 0x18;
+    rlog("handyman %u back from the strike, off the paths at %d,%d: to the nearest path",
+         (p - M32(PEOPLE)) / REC, M8(p + 7), M8(p + 9));
+}
+
+void handyman_decide(void (*lifted)(void)) {  /* 0x4517E0: state 0x16 */
+    uint32_t p = M32(g_esp + 4);
+    if ((tp_rules & RULE_HANDYMEN) && handyman(p)) {
+        uint16_t f = tflags(tile_of(p));
+        if (!(f & HANDY_PATH) && (f != 0 || M16(p + 0x9C) != 0xFFFF)) {   /* not a path; not his lawn */
+            M8(p + 0xC) = 0x1A;
+            M8(p + 0xD) = 0x18;
+            M8(p + 0x13) = M8(STAFF_TABLE + 2 * 0x36 + 0x31);   /* walking speed: a handyman's */
+            M16(p + 0x14) = 0;
+            g_eax = (g_eax & ~0xFFu) | 1;         /* as the original returns: al = 1 */
+            g_esp += 4;                           /* and its ret */
+            return;
+        }
+    }
+    lifted();
+}
+
+/* 0x453E5D(p, depth): the next step of a patrol leg toward +0x56/+0x57: a
+ * direction 0-3 (tile offsets -64, +1, +64, -1, table 0x4A4920), 4 there, -2
+ * no way. With the rule: the first step of the shortest way along the paths,
+ * the way it faces first when two are as short (so it is the same on every
+ * machine). */
+void patrol_step(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4);
+    if (!(tp_rules & RULE_HANDYMEN)) { lifted(); return; }
+    static int16_t dist[4096];
+    static uint16_t q[4096];
+    static const int off[4] = { -64, 1, 64, -1 };
+    int cur = tile_of(p), tgt = M8(p + 0x57) * 64 + M8(p + 0x56), best = -2, bd = 0x7FFF;
+    M8(p + 5) &= (uint8_t)~0x30;
+    if (cur == tgt) best = 4;
+    else if (tgt >= 0 && tgt < 4096 && (tflags(tgt) & HANDY_PATH)) {
+        for (int i = 0; i < 4096; i++) dist[i] = -1;
+        int h = 0, n = 0;
+        dist[tgt] = 0; q[n++] = (uint16_t)tgt;
+        while (h < n) {
+            int t = q[h++];
+            for (int k = 0; k < 4; k++) {
+                int u = t + off[k];
+                if (u < 0 || u >= 4096 || ((k & 1) && u / 64 != t / 64) || dist[u] >= 0 || !(tflags(u) & HANDY_PATH)) continue;
+                dist[u] = (int16_t)(dist[t] + 1);
+                q[n++] = (uint16_t)u;
+            }
+        }
+        for (int j = 0; j < 4; j++) {
+            int k = (M8(p + 0x12) + j) & 3, u = cur + off[k];
+            if (u < 0 || u >= 4096 || ((k & 1) && u / 64 != cur / 64)) continue;
+            if (dist[u] >= 0 && dist[u] < bd) { bd = dist[u]; best = k; }
+        }
+    }
+    g_eax = (uint32_t)best;
+    g_esp += 4;                                   /* its ret */
+}
+
+/* ---- building (#23, #21, #15) ------------------------------------------- */
+/* A tile: +0 w the first of the people-array records on it (chained by +2;
+ * the chain ends in 0, or in a tree or lamp: -1..-11), +2 b ground type, +3 b
+ * bit 8 locked. Raised track (coasters, big dipper, water splash, monorail)
+ * is records of type 0x12 in the chain over ground type 0x68 (flags 0x400).
+ *  - Fences (0x4187D8(base, tile, commit), also the pointer's preview) need
+ *    ground flags 0 and nothing on the tile, so never go under track, though
+ *    paths and queues do (#23).
+ *  - A lamp (0x430DA6(tile), the selected feature at 0x4C6646) needs ground
+ *    flags 0: never on a path, as in the prototypes (#21).
+ *  - Track pieces are records in the same 1199 as the guests, and the guests
+ *    may take all but 100 (0x41845A; the second spawner 0x4564F1 all of
+ *    them). In a busy park a track piece shows it fits and then the click does
+ *    nothing: there is no record for it (#15).
+ * With the rule: a fence goes under raised track (the game draws it, though
+ * the track's pillars are not drawn on it); a lamp goes on a plain path, and
+ * guests walk past it; and the guests leave BUILD_RESERVE more records for
+ * building. */
+#define BUILD_RESERVE 150
+#define FEATURE_PICKED 0x4C6646   /* w: the feature the player is placing */
+#define LAMP 2
+
+static int16_t chain_tail(int tile, int only_track) {   /* what ends the chain; -32768 if a record isn't track */
+    int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)tile);
+    for (int hops = 0; i > 0 && hops < 256; hops++) {
+        uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+        if (only_track && M8(q + 4) != 0x12) return -32768;
+        i = (int16_t)M16(q + 2);
+    }
+    return i;
+}
+
+void fence_place(void (*lifted)(void)) {
+    int tile = (int)(M32(g_esp + 8) & 0xFFFF), commit = (int)M32(g_esp + 12);
+    uint32_t t = M32(TILES) + 4u * (uint32_t)(tile & 4095);
+    uint16_t f = tflags(tile & 4095);
+    int16_t head = (int16_t)M16(t);
+    if (!(tp_rules & RULE_BUILD) || tile < 0 || tile >= 4096 || (M8(t + 3) & 8) || (f != 0 && f != 0x400) ||
+        head <= 0 || chain_tail(tile, 1) != 0) { lifted(); return; }
+    uint8_t type = M8(t + 2);
+    M16(t) = 0; M8(t + 2) = 0;                    /* as if bare grass */
+    lifted();
+    M16(t) = (uint16_t)head;                       /* the track stays on it */
+    if (!commit || !g_eax) M8(t + 2) = type;       /* no fence after all */
+    else rlog("fence under the track at %d,%d", tile % 64, tile / 64);
+}
+
+void lamp_place(void (*lifted)(void)) {
+    int tile = (int)(M32(g_esp + 4) & 0xFFFF);
+    uint32_t t = M32(TILES) + 4u * (uint32_t)(tile & 4095);
+    if (!(tp_rules & RULE_BUILD) || tile < 0 || tile >= 4096 || M16(FEATURE_PICKED) != LAMP ||
+        tflags(tile) != 2 || (M8(t + 3) & 8) || chain_tail(tile, 0) != 0) { lifted(); return; }
+    uint16_t head = M16(t);
+    uint8_t type = M8(t + 2);
+    M16(t) = 0; M8(t + 2) = 0;
+    lifted();
+    int16_t lamp = (int16_t)M16(t);                /* what it put: the lamp, -3, or nothing */
+    M16(t) = head; M8(t + 2) = type;               /* the path and whoever is on it */
+    if (!g_eax || lamp >= 0) return;
+    int16_t i = (int16_t)head;                     /* the lamp ends the chain */
+    if (i <= 0) { M16(t) = (uint16_t)lamp; }
+    else {
+        for (int hops = 0; hops < 256; hops++) {
+            uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+            if ((int16_t)M16(q + 2) <= 0) { M16(q + 2) = (uint16_t)lamp; break; }
+            i = (int16_t)M16(q + 2);
+        }
+    }
+    rlog("lamp on the path at %d,%d", tile % 64, tile / 64);
+}
+
+static void with_reserve(void (*lifted)(void)) {   /* a guest spawner, sees fewer records */
+    if (!(tp_rules & RULE_BUILD)) { lifted(); return; }
+    uint32_t end = M32(PEOPLE_END);
+    M32(PEOPLE_END) = end - BUILD_RESERVE * REC;
+    lifted();
+    M32(PEOPLE_END) = end;
+}
+void guest_spawn(void (*lifted)(void)) { with_reserve(lifted); }    /* 0x41845A */
+void guest_spawn2(void (*lifted)(void)) { with_reserve(lifted); }   /* 0x4564F1 */
+
 /* ---- stuck guests (#17) ------------------------------------------------- */
 /* A guest whose way out the game cannot find (0x412BA6) goes to state 0x20,
  * "stuck" (0x41276C): every 50 ticks it asks the pathfinder again, and the
@@ -128,14 +425,10 @@ void guard_patrol(void (*lifted)(void)) {
  * along the shortest way to the gate. Then it walks on (state 6), as when the
  * pathfinder finds a way. The decision uses only the game's own state, so all
  * the machines of a network game make it alike. */
-#define TILES      0x4C3B08   /* 64x64 tiles of 4 bytes: +2 tile type */
-#define TILE_FLAGS 0x4A44D9   /* per type, 4 bytes: +0 w flags */
 #define BLOCKS_WALK 0x29C1    /* flags a guest walking out may not cross (0x4127AD) */
 #define ENTRANCE   0x4C4706   /* w: the gate's tile, player record +0x2CA */
 #define STUCK_TRIES 4         /* tries (50 ticks each) before a move */
 #define STUCK_HOP  8          /* tiles along the way, when the tile has one */
-
-static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a);
 
 static int walkable(int t) {
     return !(M16(TILE_FLAGS + 4 * M8(M32(TILES) + 4 * (uint32_t)t + 2)) & BLOCKS_WALK);
