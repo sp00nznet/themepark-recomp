@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-enum { RULE_GUARDS = 1 };
+enum { RULE_GUARDS = 1, RULE_STUCK = 2 };
 #define RULE_MAX 16              /* the menus have room for this many */
 
 typedef struct { uint32_t bit; const char* key; const char* label; const char* about; } rule_t;

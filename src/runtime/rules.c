@@ -46,6 +46,8 @@ uint32_t tp_rules;
 const rule_t rule_list[] = {
     { RULE_GUARDS, "guards", "Guards go after thugs nearby",
       "A patrolling guard heads for any thug within 12 tiles, not only one straight ahead on the path (#8)." },
+    { RULE_STUCK, "unstick", "Stuck guests find their way out",
+      "A guest stuck for a few seconds is moved out of the pocket it is fenced into, or along its way to the gate (#17)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -112,6 +114,85 @@ void guard_patrol(void (*lifted)(void)) {
     g_eax = 1;
     rlog("guard %u at %d,%d heads for thug %u at %d,%d", me, gx, gy,
          (thug - M32(PEOPLE)) / REC, M8(thug + 7), M8(thug + 9));
+}
+
+/* ---- stuck guests (#17) ------------------------------------------------- */
+/* A guest whose way out the game cannot find (0x412BA6) goes to state 0x20,
+ * "stuck" (0x41276C): every 50 ticks it asks the pathfinder again, and the
+ * advisor says some bad planning has got one stuck. Fenced into a pocket, it
+ * stays there until the player clears a way. With the rule, after a few failed
+ * tries the guest is moved: out of a pocket, to the nearest tile with a way to
+ * the gate; on a tile that has a way the game's short search missed, 8 tiles
+ * along the shortest way to the gate. Then it walks on (state 6), as when the
+ * pathfinder finds a way. The decision uses only the game's own state, so all
+ * the machines of a network game make it alike. */
+#define TILES      0x4C3B08   /* 64x64 tiles of 4 bytes: +2 tile type */
+#define TILE_FLAGS 0x4A44D9   /* per type, 4 bytes: +0 w flags */
+#define BLOCKS_WALK 0x29C1    /* flags a guest walking out may not cross (0x4127AD) */
+#define ENTRANCE   0x4C4706   /* w: the gate's tile, player record +0x2CA */
+#define STUCK_TRIES 4         /* tries (50 ticks each) before a move */
+#define STUCK_HOP  8          /* tiles along the way, when the tile has one */
+
+static uint32_t guest_call(uint32_t addr, int n, const uint32_t* a);
+
+static int walkable(int t) {
+    return !(M16(TILE_FLAGS + 4 * M8(M32(TILES) + 4 * (uint32_t)t + 2)) & BLOCKS_WALK);
+}
+
+/* Steps from the gate to every walkable tile (-1: no way). */
+static void way_out(int16_t* dist) {
+    static int16_t q[4096];
+    int head = 0, tail = 0, gate = M16(ENTRANCE + M16(0x4C665C) * 0x6C2);
+    for (int t = 0; t < 4096; t++) dist[t] = -1;
+    if (gate < 0 || gate >= 4096) return;
+    dist[gate] = 0; q[tail++] = (int16_t)gate;
+    while (head < tail) {
+        int t = q[head++], x = t % 64, y = t / 64;
+        const int nb[4][2] = { { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } };
+        for (int k = 0; k < 4; k++) {
+            int nx = nb[k][0], ny = nb[k][1], n = ny * 64 + nx;
+            if (nx < 0 || nx > 63 || ny < 0 || ny > 63 || dist[n] >= 0 || !walkable(n)) continue;
+            dist[n] = (int16_t)(dist[t] + 1);
+            q[tail++] = (int16_t)n;
+        }
+    }
+}
+
+void guest_stuck(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4), me = (p - M32(PEOPLE)) / REC;
+    int tries = (int16_t)M16(p + 0x14) <= 1;      /* this pass asks the pathfinder */
+    lifted();
+    if (!(tp_rules & RULE_STUCK) || !tries || M8(p + 0xC) != 0x20 || (M32(TICKS) / 50 + me) % STUCK_TRIES) return;
+    static int16_t dist[4096];
+    way_out(dist);
+    int x = M8(p + 7), y = M8(p + 9), here = y * 64 + x, to = -1;
+    if (dist[here] > 0) {                          /* a way the search missed: along it */
+        to = here;
+        for (int s = 0; s < STUCK_HOP && dist[to] > 0; s++) {
+            const int nb[4] = { to + 1, to - 1, to + 64, to - 64 };
+            for (int k = 0; k < 4; k++) {
+                int n = nb[k];
+                if (n < 0 || n >= 4096 || (k < 2 && n / 64 != to / 64) || dist[n] != dist[to] - 1) continue;
+                to = n; break;
+            }
+        }
+    } else {                                       /* a pocket: the nearest tile with a way */
+        int best = 1 << 30;
+        for (int t = 0; t < 4096; t++) {
+            if (dist[t] < 0) continue;
+            int d = abs(t % 64 - x) + abs(t / 64 - y);
+            if (d < best) { best = d; to = t; }
+        }
+    }
+    if (to < 0 || to == here) return;
+    uint32_t a[3] = { p, (uint32_t)((to % 64) << 8 | 0x80), (uint32_t)((to / 64) << 8 | 0x80) };
+    guest_call(0x408A44, 3, a);                    /* move: off the old tile's list, onto the new */
+    /* What 0x4127DD does when the pathfinder finds a way. */
+    M8(p + 0xC) = 6;
+    M16(p + 0x14) = 0;
+    M16(p + 0xA) = M16(M32(FRAMES) + 2 * (M16(0x4A49F4 + M8(p + 0x59) * 0x24) + M8(p + 0x12)));
+    rlog("stuck guest %u at %d,%d moved to %d,%d (%s)", me, x, y, to % 64, to / 64,
+         dist[here] > 0 ? "along the way out" : "out of a pocket");
 }
 
 /* ---- tests -------------------------------------------------------------- */
