@@ -14,7 +14,7 @@ endif()
 
 file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.h HAS_VESA_CUSTOM REGEX "dos32_vesa_custom")
 if(NOT HAS_VESA_CUSTOM)
-  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (dos32_vesa_custom, pcrecomp branch dos32-custom-vesa): git -C ${PCRECOMP} pull")
+  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (dos32_vesa_custom, pcrecomp#123): git -C ${PCRECOMP} pull, or run Setup again: it fetches a current one")
 endif()
 
 file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.c HAS_POSIX REGEX "fix_case")

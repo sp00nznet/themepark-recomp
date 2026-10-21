@@ -111,8 +111,24 @@ if (-not (Test-Path (Join-Path $Toolkit 'tools\lift\lift32.py'))) {
   if (-not (Ask "  Download it now (git, about 20 MB)?")) { Fail "pcrecomp is required at $Toolkit." }
   Run "Cloning pcrecomp" @('git', 'clone', '--depth', '1', 'https://github.com/sp00nznet/pcrecomp', $Toolkit)
 }
-if (-not (Select-String -Quiet -Path (Join-Path $Toolkit 'runtime\dos32\dos32.h') -Pattern 'dos32_state_save' -ErrorAction SilentlyContinue)) {
-  Fail "your pcrecomp at $Toolkit is older than this game needs. Update it: git -C `"$Toolkit`" pull"
+# The newest toolkit feature the game uses (pcrecomp#123); CMakeLists.txt checks the same.
+function Toolkit-Current($t) { Select-String -Quiet -Path (Join-Path $t 'runtime\dos32\dos32.h') -Pattern 'dos32_vesa_custom' -ErrorAction SilentlyContinue }
+if (-not (Toolkit-Current $Toolkit)) {
+  $Fresh = Join-Path $Parent 'pcrecomp'
+  if ($env:PCRECOMP) { Fail "your pcrecomp at $Toolkit (PCRECOMP) is older than this game needs. Update it: git -C `"$Toolkit`" pull" }
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Fail "pcrecomp at $Toolkit is older than this game needs, and git is needed to fetch a new one. Install Git for Windows, then run Setup.cmd again." }
+  if ($Toolkit -eq $Fresh) {
+    Say "  The pcrecomp at $Toolkit is older than this game needs."
+    if (-not (Ask "  Update it now (git pull)?")) { Fail "a newer pcrecomp is required: git -C `"$Toolkit`" pull" }
+    Run "Updating pcrecomp" @('git', '-C', $Toolkit, 'pull', '--ff-only')
+  } else {
+    # An older setup's ../tools: leave it as it is, and fetch a current one beside it.
+    Say "  The pcrecomp at $Toolkit is older than this game needs; a current one goes in $Fresh (the old one is not touched)."
+    if (-not (Ask "  Download it now (git, about 20 MB)?")) { Fail "a newer pcrecomp is required at $Fresh." }
+    Run "Cloning pcrecomp" @('git', 'clone', '--depth', '1', 'https://github.com/sp00nznet/pcrecomp', $Fresh)
+    $Toolkit = $Fresh
+  }
+  if (-not (Toolkit-Current $Toolkit)) { Fail "pcrecomp at $Toolkit is still older than this game needs. Update it: git -C `"$Toolkit`" pull" }
 }
 Say "  pcrecomp: $Toolkit"
 
