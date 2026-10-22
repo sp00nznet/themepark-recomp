@@ -198,6 +198,34 @@ has a hotkey (the table at 0x4A7537, 6 bytes an action: two sprites, the
 key, a kind); the windows' ticks (actions 3 and 0x18) have none, and the
 rule gives them Esc.
 
+### Engineers reach their rides (`engineers`, issue #40)
+
+**In 1994:** every engineer's walk is a step at a time with a short search
+that heads straight for the target and feels its way round anything in the
+way. It gets there in the end round most things, but slowly, and:
+- An engineer with no way out at all gives up at once. Engineers have lunch
+  on bare grass, which is where gardens get hedged in, so an engineer hedged
+  in takes a call, gives it up, has lunch, and takes the same call again,
+  every few seconds, until you pick him up and drop him somewhere else.
+- Putting the hoarding up and taking it down is a walk to each point round
+  the ride, each one with that search. In the demo park the median repair
+  spends 14 s putting it up and 23 s taking it down, up to a minute each.
+  A walk on the round that fails leaves the ride closed with half its
+  hoarding up, and no one comes back for it.
+- After a repair he walks to a random tile within 8 and, unless it is grass
+  with no other staff on it, tries another: up to 40 s of wandering.
+
+**With the rule:** an engineer's walk takes the shortest way, over anything
+the game lets him walk on; an engineer with no way from where he stands is
+put on the nearest tile that has one, as stuck guests are; the hoarding's
+walks go twice as fast; and after a repair he walks to the nearest free
+grass. In the demo park over 10 minutes: 27 repairs instead of 20, a median
+of 47 s instead of 69 s, the hoarding 9 s up and 9 s down, and the walk to
+lunch 3 s at most.
+
+Not changed: the hoarding's look (new art), and where engineers rest (the
+nearest free grass, as in 1994, not a staff room).
+
 ## Asked for, and not possible
 
 - **Turning shops and sideshows** (issue #20): the game has one drawing of
