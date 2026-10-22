@@ -22,6 +22,7 @@ handymen=1
 building=1
 lights=1
 esc=1
+deal=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -197,6 +198,19 @@ window, the finance window and most of the rest only close with their tick.
 has a hotkey (the table at 0x4A7537, 6 bytes an action: two sprites, the
 key, a kind); the windows' ticks (actions 3 and 0x18) have none, and the
 rule gives them Esc.
+
+### Handshake sounds wait for the deal (`deal`, issue #49)
+
+**In 1994:** in a negotiation (0x434EA5), the moment the offer reaches the
+demand the game stops the heartbeat and the crowd cheers (0x436243), but the
+deal only closes when the demand's hand has finished sliding to its new place
+(`[ebp-0x44]` against `[ebp-0x20]`). Until then the cheer starts again every
+frame, and if the demand moves away first, the heartbeat is gone and the
+cheer comes again at the next near miss.
+
+**With the rule:** stopping the song (0x470990) and the cheer (effect 0x27 at
+0x470FE0) are held back while the deal is still pending, so the heartbeat
+runs on and the crowd cheers once, at the handshake. Only the sound changes.
 
 ## Asked for, and not possible
 
