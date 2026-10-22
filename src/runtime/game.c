@@ -313,4 +313,8 @@ void park_zones(void (*lifted)(void)) {
     ZONE(2, 2) = (int16_t)w;                                   /* bottom edge */
     ZONE(29, 2) = (int16_t)(w - 2);                            /* the park */
     ZONE(30, 2) = (int16_t)(w - 4);                            /* the message bar */
+    for (int i = 22; i <= 28; i++) {                           /* the staff icons: the top right corner (#11) */
+        ZONE(i, 0) = (int16_t)(w - 26 - 26 * (i - 22));
+        ZONE(i, 2) = (int16_t)(ZONE(i, 0) + 26);
+    }
 }
