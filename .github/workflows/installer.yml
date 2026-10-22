@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   installer:
-    uses: sp00nznet/recomp-launcher/.github/workflows/installer.yml@main
+    uses: sp00nznet/recomp-launcher/.github/workflows/installer.yml@v0.3.0
     with:
+      launcher-ref: v0.3.0
       name: ThemePark-Recomp-Installer
       platforms: windows linux

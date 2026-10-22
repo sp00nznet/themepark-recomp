@@ -5,6 +5,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0-alpha.2] - 2026-10-21
+
+### Changed
+- The installer is recomp-launcher 0.3.0, pinned instead of following its
+  main: it shows its version in the corner and title, and says when a newer
+  release is out, with a download button (redalert2-recomp#25).
+
 ## [0.4.0-alpha.1] - 2026-10-21
 
 ### Added
