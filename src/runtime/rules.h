@@ -2,7 +2,8 @@
 #pragma once
 #include <stdint.h>
 
-enum { RULE_GUARDS = 1, RULE_STUCK = 2, RULE_ADVISOR = 4, RULE_ENTERTAIN = 8, RULE_HANDYMEN = 16, RULE_BUILD = 32, RULE_LIGHTS = 64, RULE_ESC = 128, RULE_DEAL = 256 };
+enum { RULE_GUARDS = 1, RULE_STUCK = 2, RULE_ADVISOR = 4, RULE_ENTERTAIN = 8, RULE_HANDYMEN = 16, RULE_BUILD = 32, RULE_LIGHTS = 64, RULE_ESC = 128, RULE_DEAL = 256,
+       RULE_ENGINEERS = 512 };
 #define RULE_MAX 16              /* the menus have room for this many */
 
 typedef struct { uint32_t bit; const char* key; const char* label; const char* about; } rule_t;

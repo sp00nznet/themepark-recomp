@@ -15,6 +15,7 @@ then runs headless with the rule off and on:
            fountain on a path, the camera past the back of the park
   lights   the demo park in a storm: do the lamps glow
   deal     (a new park) staff negotiation, offer just under the demand: one cheer
+  engineers an engineer hedged in on a lawn and sent walking: does he get there
 Needs game/ (setup) and a build. Takes a few minutes.
 """
 import argparse
@@ -32,6 +33,7 @@ BASE = 0x492824C                      # the people table in these runs
 GUEST = BASE + 15 * 0xC8               # a guest of the demo park, walking at 70 s
 HANDY = BASE + 241 * 0xC8              # a handyman
 THUG = BASE + 332 * 0xC8               # the first thug sent in at 56 s
+ENGINEER = BASE + 262 * 0xC8           # an engineer idle on the lawn
 
 
 def dump_bytes(exe, rules, seconds, extra, at):
@@ -159,6 +161,20 @@ def building(exe):
     return ok
 
 
+def engineers(exe):
+    # On the lawn at 11,13 with a ring of hedges round him, then walking (state 0xA, lunch after) to 11,24.
+    ring = [(10, 12), (11, 12), (12, 12), (10, 13), (12, 13), (10, 14), (11, 14), (12, 14)]
+    extra = ['--call', '55:408a44:%x:b80:d80' % ENGINEER]
+    extra += sum((['--call', '55.%d:4187d8:16:%x:1' % (k + 1, y * 64 + x)] for k, (x, y) in enumerate(ring)), [])
+    for off, v in ((0xC, 0xA), (0xD, 8), (0x56, 11), (0x57, 24), (0x14, 1), (0x15, 0)):
+        extra += ['--poke', '56:%x=%x' % (ENGINEER + off, v)]
+    ok = True
+    for rules, want in (('none', (11, 13)), ('engineers', (11, 24))):
+        d = dump_bytes(exe, rules, 80, extra, 79)
+        ok &= (d[ENGINEER + 7 - 0x400000], d[ENGINEER + 9 - 0x400000]) == want
+    return check(ok, 'engineers: hedged in, he still gets there')
+
+
 def lights(exe):
     # A storm comes at 586.5 s (in 640x480, with these inputs); the demo park has lamps.
     import tempfile
@@ -208,7 +224,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe), esc(exe), deal(exe)])
+              lights(exe), esc(exe), deal(exe), engineers(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

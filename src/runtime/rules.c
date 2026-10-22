@@ -73,6 +73,9 @@ const rule_t rule_list[] = {
       "Esc closes the open window, as the tick does: status, finance and the rest, not only the staff window (#43)." },
     { RULE_DEAL, "deal", "Handshake sounds wait for the deal",
       "In a negotiation the heartbeat keeps going and the cheer waits until the hands have shaken, not just come close (#49)." },
+    { RULE_ENGINEERS, "engineers", "Engineers reach their rides",
+      "Engineers take the shortest way to a broken ride and round it, past hedges, walls and fences, put the hoardings up "
+      "and down twice as fast, and after a repair walk to the nearest free patch of grass (#40)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -340,6 +343,125 @@ void patrol_step(void (*lifted)(void)) {
     }
     g_eax = (uint32_t)best;
     g_esp += 4;                                   /* its ret */
+}
+
+/* ---- engineers (#40) ---------------------------------------------------- */
+/* An engineer's states (job 1): 8 lunch, and every 200 ticks look for the
+ * nearest ride (marker records of type 6 or 0x1C, +0x16 the ride) worn past
+ * 0x27 with nobody on it; 0x12 the call; 0xA walk to +0x56/+0x57, then the
+ * state in +0xD; 0xC close the ride and put the hoarding up, a walk (+0x20
+ * the point, from the ride's table) to each point round it; 0xE repair; 0x10
+ * take the hoarding down, the same round; 0x14 look for lunch: walk to a
+ * random tile within 8 (0x423E3F), until on grass with no staff. Every walk
+ * is a step at a time by 0x4249EB, a greedy step and a wall-follow, so a
+ * hedge or fence in the way sends him the long way round, or, when he has no
+ * way at all, makes him give up: walking to the ride he gives up the call and
+ * has lunch, then takes the same call again, for ever; on the round, he
+ * leaves the ride closed with half its hoarding up, and no one comes for it
+ * (0x423133 skips a closed ride). He has lunch on grass, where gardens get
+ * hedged in round him. The lunch walk tries random tiles until one is free
+ * grass.
+ * With the rule: an engineer's walk takes the shortest way (along any tile
+ * the game lets him walk); with no way from where he is (hedged in), he is
+ * put on the nearest tile that has one, as stuck guests are; the hoarding
+ * walks go twice as fast; and lunch is the nearest free grass he can walk to. */
+static int engineer(uint32_t p) { return M8(p + 4) == 8 && M8(p + 0x59) == 1; }
+static int hoarding_leg(uint32_t p) {   /* walking round the ride, not to it */
+    int ret = M8(p + 0xD);
+    return M8(p + 0xC) == 0xA && (ret == 0xC || ret == 0x10) && M32(p + 0x20) > 0;
+}
+
+static int eng_walks(int t, uint16_t mask) {   /* as 0x4249EB: flags in the mask block, but bit 2 lets through */
+    uint16_t f = tflags(t);
+    return !(f & mask) || (f & 2);
+}
+
+/* Steps to tgt from every tile (-1: no way). */
+static void eng_bfs(int16_t* dist, int tgt, uint16_t mask) {
+    static uint16_t q[4096];
+    static const int off[4] = { -64, 1, 64, -1 };
+    int h = 0, n = 0;
+    for (int i = 0; i < 4096; i++) dist[i] = -1;
+    dist[tgt] = 0; q[n++] = (uint16_t)tgt;
+    while (h < n) {
+        int t = q[h++];
+        for (int k = 0; k < 4; k++) {
+            int u = t + off[k];
+            if (u < 0 || u >= 4096 || ((k & 1) && u / 64 != t / 64) || dist[u] >= 0 || !eng_walks(u, mask)) continue;
+            dist[u] = (int16_t)(dist[t] + 1);
+            q[n++] = (uint16_t)u;
+        }
+    }
+}
+
+/* 0x4249EB(p, depth, mask): the next step toward +0x56/+0x57: 0-3 (tile
+ * offsets -64, +1, +64, -1, table 0x4A4920), 4 there, negative no way. */
+void walk_step(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4);
+    uint16_t mask = (uint16_t)M32(g_esp + 12);
+    int st = M8(p + 0xC);
+    if (!(tp_rules & RULE_ENGINEERS) || !engineer(p) || (st != 0xA && st != 0x14)) { lifted(); return; }
+    static int16_t dist[4096];
+    static const int off[4] = { -64, 1, 64, -1 };
+    int cur = tile_of(p), tx = M8(p + 0x56), ty = M8(p + 0x57), best = -1, bd = 0x7FFF;
+    M8(p + 5) &= (uint8_t)~0x30;                  /* the wall-follow's state */
+    if (tx > 63 || ty > 63) { g_eax = (uint32_t)-1; g_esp += 4; return; }   /* 0x423E3F's random tile can be off the map */
+    int tgt = ty * 64 + tx;
+    eng_bfs(dist, tgt, mask);
+    for (int pass = 0; pass < 2 && best < 0; pass++) {
+        if (cur == tgt) { best = 4; break; }
+        for (int j = 0; j < 4; j++) {             /* the way it faces first, when two are as short */
+            int k = (M8(p + 0x12) + j) & 3, u = cur + off[k];
+            if (u < 0 || u >= 4096 || ((k & 1) && u / 64 != cur / 64)) continue;
+            if (dist[u] >= 0 && dist[u] < bd) { bd = dist[u]; best = k; }
+        }
+        if (best >= 0 || pass || st != 0xA) break;
+        /* No way from here (hedged in): the nearest tile with one, as stuck guests. */
+        int to = tgt, td = 0x7FFF;
+        for (int u = 0; u < 4096; u++) {
+            int dd = abs(u % 64 - cur % 64) + abs(u / 64 - cur / 64);
+            if (dist[u] >= 0 && dd < td) { td = dd; to = u; }
+        }
+        uint32_t a[3] = { p, (uint32_t)((to % 64) << 8 | 0x80), (uint32_t)((to / 64) << 8 | 0x80) };
+        guest_call(0x408A44, 3, a);
+        rlog("engineer %u had no way to %d,%d from %d,%d: put on %d,%d", (p - M32(PEOPLE)) / REC, tx, ty,
+             cur % 64, cur / 64, to % 64, to / 64);
+        cur = to;
+    }
+    g_eax = (uint32_t)best;
+    g_esp += 4;                                   /* its ret */
+}
+
+/* 0x423482: state 0xA, a walk. The hoarding's walks twice a tick. */
+void eng_walk(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4), ra = M32(g_esp);
+    int twice = (tp_rules & RULE_ENGINEERS) && engineer(p) && hoarding_leg(p);
+    lifted();
+    if (twice && hoarding_leg(p)) { g_esp -= 4; M32(g_esp) = ra; lifted(); }
+}
+
+static int free_grass(uint32_t p, int t) {     /* what ends the lunch walk (0x423F14) */
+    if (tflags(t) != 0) return 0;
+    for (int16_t i = (int16_t)M16(M32(TILES) + 4 * (uint32_t)t); i > 0; i = (int16_t)M16(M32(PEOPLE) + (uint32_t)i * REC + 2)) {
+        uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+        if (M8(q + 4) == 8 && q != p) return 0;
+    }
+    return 1;
+}
+
+/* 0x423E3F(p): the work is done; off to lunch at a random tile. */
+void eng_lunch(void (*lifted)(void)) {
+    uint32_t p = M32(g_esp + 4);
+    lifted();
+    if (!(tp_rules & RULE_ENGINEERS) || !engineer(p) || M8(p + 0xC) != 0x14) return;
+    static int16_t dist[4096];
+    int best = -1;
+    eng_bfs(dist, tile_of(p), 0x39C1);            /* from him: the mask of the lunch walk */
+    for (int t = 0; t < 4096; t++)                /* nearest; the lowest tile when two are as near */
+        if (dist[t] >= 0 && (best < 0 || dist[t] < dist[best]) && free_grass(p, t)) best = t;
+    if (best < 0) return;                         /* none: as the game, at random */
+    M8(p + 0x56) = (uint8_t)(best % 64);
+    M8(p + 0x57) = (uint8_t)(best / 64);
 }
 
 /* ---- building (#23, #21, #15) ------------------------------------------- */
