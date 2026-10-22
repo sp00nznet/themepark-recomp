@@ -84,6 +84,9 @@ const effect_group effect_groups[] = {
     { "toilets", "Toilets", "FLUSH" },
     { "thunder", "Thunder", "THUNDER" },
     { "buttons", "Buttons", "BUTTON BUTTON2 BUTTON3 BUTTON4 BUTTON5 BUTTON6" },
+    { "hammer", "Engineers hammering", "HAMMER" },
+    { "lifts", "Coaster lift chains", "RATCHET" },
+    { "fireworks", "Fireworks", "ROCKET EXPLOD3" },
 };
 const int effect_group_count = sizeof effect_groups / sizeof effect_groups[0];
 uint32_t effects_muted;

@@ -16,6 +16,9 @@
 #include "compat.h"
 #include <stdint.h>
 #include <stdio.h>
+#ifdef _WIN32
+#include <io.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -345,6 +348,16 @@ int main(int argc, char** argv) {
             for (i++; i < argc; i++) { strncat(args, argv[i], sizeof args - strlen(args) - 2); strcat(args, " "); }
         } else { fprintf(stderr, "themepark: unknown option %s\n", argv[i]); return 2; }
     }
+#ifdef _WIN32
+    /* Started from Explorer or the .cmd, the console is the game's own and
+     * closes with it, taking any error along (#37): keep it in a file. */
+    if (!headless && _isatty(_fileno(stderr))) {
+        char log[MAX_PATH];
+        exe_dir(log, sizeof log);
+        strncat(log, "themepark.log", sizeof log - strlen(log) - 1);
+        if (freopen(log, "w", stderr)) setvbuf(stderr, NULL, _IONBF, 0);
+    }
+#endif
     if (headless && !getenv("TP_NET_REJOIN")) net_wait_on_drop = 0;   /* a test ends when a player does */
     /* The game's own switch for a network game; a joining machine is told
      * the real count by the host (net.c). */

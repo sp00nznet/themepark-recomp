@@ -386,7 +386,7 @@ static void effects_menu(void) {
 /* Modern rules (rules.c): each on or off; the host's in a network game. */
 static void rules_menu(void) {
     for (;;) {
-        char text[2400], t[RULE_MAX][96];
+        char text[4096], t[RULE_MAX][96];
         const char* l[RULE_MAX + 3];
         int n = snprintf(text, sizeof text, "%s", net_n ? "In a network game everyone plays by the host's rules.\n\n" :
                          "Changes to how the 1994 game behaves, each off unless you turn it on.\n\n");

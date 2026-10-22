@@ -11,8 +11,11 @@ then runs headless with the rule off and on:
   guards   (2) a guard dropped elsewhere mid-escort: is her thug let go
   entertainers  the panel's counts after 5 minutes
   handymen a handyman dropped on a ride's footprint: does he find a path
-  building fences under the coaster, lamps and a fountain on a path
+  building fences under the coaster and where a guest stands, lamps and a
+           fountain on a path, the camera past the back of the park
   lights   the demo park in a storm: do the lamps glow
+  deal     (a new park) staff negotiation, offer just under the demand: one cheer
+  engineers an engineer hedged in on a lawn and sent walking: does he get there
 Needs game/ (setup) and a build. Takes a few minutes.
 """
 import argparse
@@ -30,6 +33,7 @@ BASE = 0x492824C                      # the people table in these runs
 GUEST = BASE + 15 * 0xC8               # a guest of the demo park, walking at 70 s
 HANDY = BASE + 241 * 0xC8              # a handyman
 THUG = BASE + 332 * 0xC8               # the first thug sent in at 56 s
+ENGINEER = BASE + 262 * 0xC8           # an engineer idle on the lawn
 
 
 def dump_bytes(exe, rules, seconds, extra, at):
@@ -143,7 +147,32 @@ def building(exe):
     foot = [(x, y) for y in (51, 52) for x in (32, 33, 34)]
     ok &= check(all(kind(placed, x, y) == 0x8000 for x, y in foot) and all(kind(gone, x, y) == 2 for x, y in foot),
                 'building: a fountain on a path, and the path back')
+    # A guest put on the grass at (60,53) and a fence on that tile; then the
+    # camera at row 0 and the cursor key up five times.
+    stood = ['--call', '70:408a44:%x:3c80:3580' % GUEST, '--call', '70:4187d8:6c:d7c:1']
+    up = ['--poke', '60:4c6666=00', '--poke', '60:4c6667=00', '--watch', '4c6666']
+    up += sum((['--key', '%d:48' % t] for t in range(61, 66)), [])
+    off = run(exe, 'none', 71, stood + up)
+    on = run(exe, 'building', 71, stood + up)
+    ok &= check('call 004187d8 -> 00000000' in off and 'fence where people stood at 60,53' in on,
+                'building: a fence where a guest stands')
+    rows = lambda s: [int(v, 16) - (0x10000 if int(v, 16) > 0x7FFF else 0) for v in re.findall(r'004C6666 = (\w+)', s)]
+    ok &= check(min(rows(off)) == 0 and min(rows(on)) == -3, 'building: the camera 3 rows past the back')
     return ok
+
+
+def engineers(exe):
+    # On the lawn at 11,13 with a ring of hedges round him, then walking (state 0xA, lunch after) to 11,24.
+    ring = [(10, 12), (11, 12), (12, 12), (10, 13), (12, 13), (10, 14), (11, 14), (12, 14)]
+    extra = ['--call', '55:408a44:%x:b80:d80' % ENGINEER]
+    extra += sum((['--call', '55.%d:4187d8:16:%x:1' % (k + 1, y * 64 + x)] for k, (x, y) in enumerate(ring)), [])
+    for off, v in ((0xC, 0xA), (0xD, 8), (0x56, 11), (0x57, 24), (0x14, 1), (0x15, 0)):
+        extra += ['--poke', '56:%x=%x' % (ENGINEER + off, v)]
+    ok = True
+    for rules, want in (('none', (11, 13)), ('engineers', (11, 24))):
+        d = dump_bytes(exe, rules, 80, extra, 79)
+        ok &= (d[ENGINEER + 7 - 0x400000], d[ENGINEER + 9 - 0x400000]) == want
+    return check(ok, 'engineers: hedged in, he still gets there')
 
 
 def lights(exe):
@@ -171,6 +200,20 @@ def esc(exe):
     return check(key == {'none': 0xFF, 'esc': 0x01}, 'esc: the windows\' ticks answer Esc')
 
 
+def deal(exe):
+    # The wage offer put at 0x155 (0x4C77FC) in a staff negotiation (0x4C6652 = 0x32); at 53.6 s the
+    # demand comes down to it while its hand is still sliding, and 1994's game cheers on each frame.
+    pokes = ['--poke', '50:4C6652=32'] + sum((['--poke', '52:%X=%s' % (0x4C77FC + i, b)]
+                                              for i, b in enumerate(('55', '01', '00', '00'))), [])
+    n = {}
+    for r in ('none', 'deal'):
+        p = subprocess.run([exe, '--headless', '--mute', '--nointro', '--seconds', '60', '--rules', r] + TO_MAP + pokes,
+                           cwd=HERE, capture_output=True, text=True, errors='replace',
+                           env=dict(os.environ, TP_SNDLOG='1'), timeout=1800)
+        n[r] = p.stderr.count('HURRAY1')
+    return check(n['none'] > 1 and n['deal'] == 1, 'deal: one cheer, at the handshake (%d -> %d)' % (n['none'], n['deal']))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -181,7 +224,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe), esc(exe)])
+              lights(exe), esc(exe), deal(exe), engineers(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

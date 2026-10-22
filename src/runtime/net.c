@@ -140,6 +140,10 @@ static void note(const char* fmt, int a) {
 
 static void die(const char* what) {
     fprintf(stderr, "themepark: network: %s\n", what);
+#ifdef _WIN32
+    extern int sound_headless;   /* a window: say why it is going, not just vanish */
+    if (!sound_headless) MessageBoxA(NULL, what, "Theme Park - network game", MB_OK | MB_ICONERROR);
+#endif
     exit(3);
 }
 

@@ -293,6 +293,7 @@ void double_screen(void (*lifted)(void)) {
         const uint8_t* s = dos32_mem(src + (y / 2) * 320);
         uint8_t* d = dos32_mem(dst + y * tp_w);
         for (int x = 0; x < 640; x++) d[x] = s[x / 2];
+        memset(d + 640, 0, tp_w - 640);   /* black beside it, not a frozen park (#11) */
     }
     if (rows >= 400) memset(dos32_mem(dst + rows * tp_w), 0, 80 * tp_w);
     g_esp += 4;
@@ -312,4 +313,8 @@ void park_zones(void (*lifted)(void)) {
     ZONE(2, 2) = (int16_t)w;                                   /* bottom edge */
     ZONE(29, 2) = (int16_t)(w - 2);                            /* the park */
     ZONE(30, 2) = (int16_t)(w - 4);                            /* the message bar */
+    for (int i = 22; i <= 28; i++) {                           /* the staff icons: the top right corner (#11) */
+        ZONE(i, 0) = (int16_t)(w - 26 - 26 * (i - 22));
+        ZONE(i, 2) = (int16_t)(ZONE(i, 0) + 26);
+    }
 }
