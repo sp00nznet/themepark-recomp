@@ -263,6 +263,16 @@ SCREEN_SITES.update({
     # screen has more banks (#11: the red tinge). 1920x480 ends in bank 14.
     0x0046E6D1: ('(5)', '(tp_w == 640 ? 5 : 15)'),
 })
+# The camera 3 rows past the back of the park, with the building rule
+# (RULE_BUILD = 32, rules.c view_above; #15): the edge scroll's and the keys'
+# clamps, and the pointer above the map picks row 0.
+CAM_TOP = '(tp_rules & 32u ? -3 : 0)'
+SCREEN_SITES.update({
+    0x004043EE: ('(uint32_t)(0)', CAM_TOP),
+    0x00408583: ('(uint32_t)(0)', CAM_TOP),
+    0x0040858D: ('(uint16_t)(0)', CAM_TOP),
+    0x00404B90: ('(uint16_t)(0)', '((int16_t)MEM16(0x4C6666) < 0 ? -(int16_t)MEM16(0x4C6666) : 0)'),
+})
 SCREEN_SITES.update({
     0x004023C0: ('ecx = 0x2C00u;', '@tp_present_tail'),
     0x0040AF68: ('ecx = 0x2C00u;', '@tp_present_tail'),
@@ -298,7 +308,7 @@ def patch_screen_sites(out):
                         lines[j] = lines[j].replace(const, '(uint32_t)(' + var + ')')
             done.add(int(m.group(1), 16))
         lines.insert(lines.index('#include "recomp_funcs.h"') + 1,
-                     'extern int32_t tp_w, tp_h, tp_vh;\nvoid tp_present_tail(void);\nvoid tp_clear_tail(void);')
+                     'extern int32_t tp_w, tp_h, tp_vh;\nextern uint32_t tp_rules;\nvoid tp_present_tail(void);\nvoid tp_clear_tail(void);')
         open(p, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
     missing = set(SCREEN_SITES) - done
     if missing:
