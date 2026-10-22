@@ -70,6 +70,8 @@ const rule_t rule_list[] = {
       "When rain and storms darken the park, lamp posts glow; the darker, the brighter. Only the picture changes (#18)." },
     { RULE_ESC, "esc", "Esc closes windows",
       "Esc closes the open window, as the tick does: status, finance and the rest, not only the staff window (#43)." },
+    { RULE_DEAL, "deal", "Handshake sounds wait for the deal",
+      "In a negotiation the heartbeat keeps going and the cheer waits until the hands have shaken, not just come close (#49)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -840,4 +842,27 @@ void rules_frame(void) {   /* game.c, between frames on the game thread */
                     t == 0x1A ? "thug" : "guard", (p - M32(PEOPLE)) / REC, M8(p + 0xC), M8(p + 0xD),
                     M8(p + 7), M8(p + 9), M8(p + 5), M16(p + 0x1E));
     }
+}
+
+/* ---- negotiation sounds (#49) -------------------------------------------- */
+/* The negotiation loop (0x434EA5): once the offer (0x4C7804) comes down to the
+ * ask (0x4C77FC) it stops the heartbeat and cheers (0x436243) at once, but the
+ * deal only closes when the hands drawn ([ebp-0x20]) have slid to where they
+ * should be ([ebp-0x44]). Pull back before then and the heartbeat is gone for
+ * good, and every frame the two meet the cheer is asked for again. With the
+ * rule both wait for the deal, which runs the same branch once it closes. */
+static int deal_pending(void) {
+    uint16_t s = M16(0x4C6652);                    /* 0x32 staff, 0x4E goods */
+    return (tp_rules & RULE_DEAL) && (s == 0x32 || s == 0x4E) && (int32_t)M32(g_ebp - 0x50) > 0 &&
+           (int32_t)M32(0x4C7804) <= (int32_t)M32(0x4C77FC) && (int16_t)M16(g_ebp - 0x44) > (int16_t)M16(g_ebp - 0x20);
+}
+
+void song_stop(void (*lifted)(void)) {          /* 0x470990() */
+    if (deal_pending()) { g_esp += 4; return; }  /* its ret */
+    lifted();
+}
+
+void effect_start(void (*lifted)(void)) {       /* 0x470FE0(pan, effect): 0x27 the cheer */
+    if (M32(g_esp + 8) == 0x27 && deal_pending()) { rlog("deal: cheer held"); g_esp += 4; return; }
+    lifted();
 }

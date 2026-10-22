@@ -13,6 +13,7 @@ then runs headless with the rule off and on:
   handymen a handyman dropped on a ride's footprint: does he find a path
   building fences under the coaster, lamps and a fountain on a path
   lights   the demo park in a storm: do the lamps glow
+  deal     (a new park) staff negotiation, offer just under the demand: one cheer
 Needs game/ (setup) and a build. Takes a few minutes.
 """
 import argparse
@@ -171,6 +172,20 @@ def esc(exe):
     return check(key == {'none': 0xFF, 'esc': 0x01}, 'esc: the windows\' ticks answer Esc')
 
 
+def deal(exe):
+    # The wage offer put at 0x155 (0x4C77FC) in a staff negotiation (0x4C6652 = 0x32); at 53.6 s the
+    # demand comes down to it while its hand is still sliding, and 1994's game cheers on each frame.
+    pokes = ['--poke', '50:4C6652=32'] + sum((['--poke', '52:%X=%s' % (0x4C77FC + i, b)]
+                                              for i, b in enumerate(('55', '01', '00', '00'))), [])
+    n = {}
+    for r in ('none', 'deal'):
+        p = subprocess.run([exe, '--headless', '--mute', '--nointro', '--seconds', '60', '--rules', r] + TO_MAP + pokes,
+                           cwd=HERE, capture_output=True, text=True, errors='replace',
+                           env=dict(os.environ, TP_SNDLOG='1'), timeout=1800)
+        n[r] = p.stderr.count('HURRAY1')
+    return check(n['none'] > 1 and n['deal'] == 1, 'deal: one cheer, at the handshake (%d -> %d)' % (n['none'], n['deal']))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -181,7 +196,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe), esc(exe)])
+              lights(exe), esc(exe), deal(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 
