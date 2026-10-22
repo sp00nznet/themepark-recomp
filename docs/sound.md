@@ -65,7 +65,8 @@ carries the effects.
 F10, *Sound effects* (on Linux, *More*, *Sound effects*) turns groups of
 effects on and off: sales (CASH), booing (GRPBOO*), being sick (SICK),
 thugs' motorbikes (THUGBKE), crying, cheering, laughing, screams on rides,
-toilets, thunder and buttons. They are kept in `themepark.ini`:
+toilets, thunder, buttons, engineers hammering (HAMMER), coaster lift
+chains (RATCHET) and fireworks (ROCKET, EXPLOD3). They are kept in `themepark.ini`:
 
 ```ini
 [sounds]
