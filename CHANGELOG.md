@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0-alpha.1] - 2026-10-22
+
 ### Added
 - Modern rule **Engineers reach their rides** (`engineers`, #40): the
   shortest way to a broken ride, past hedges, walls and fences; an engineer
