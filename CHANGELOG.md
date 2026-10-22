@@ -5,6 +5,31 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Modern rule **Engineers reach their rides** (`engineers`, #40): the
+  shortest way to a broken ride, past hedges, walls and fences; an engineer
+  hedged in is moved out instead of giving up the call for ever; the
+  hoardings go up and down twice as fast; after a repair, the nearest free
+  grass. Demo park, 10 minutes: 27 repairs instead of 20.
+- Modern rule **Handshake sounds wait for the deal** (`deal`, #49): in a
+  negotiation the heartbeat no longer stops, and the crowd no longer cheers,
+  when the hands only come close; the cheer comes once, at the handshake.
+- **More room to build** (#15): the camera scrolls 3 rows past the back of
+  the park, so you can keep scrolling while building up there; fences,
+  walls and hedges go on tiles where people stand (they step aside), such as
+  the grass by the gate guests cut across.
+- F10, *Sound effects* (#41): engineers hammering, coaster lift chains and
+  fireworks.
+
+### Changed
+- Wide parks (#11): the staff icons sit in the top right corner; the game's
+  own screens (stock market, research, bank) have black beside them instead
+  of a frozen park.
+- Started from Explorer or the .cmd, the game keeps its console output in
+  `themepark.log` beside the exe, so a crash's report survives the window
+  closing (#37). A network error that ends the game says why in a message
+  box.
+
 ## [0.4.0-alpha.2] - 2026-10-21
 
 ### Changed
