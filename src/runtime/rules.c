@@ -64,7 +64,8 @@ const rule_t rule_list[] = {
       "Back from a strike or off the paths, a handyman goes to the nearest path (and his patrol) instead of mowing far away, "
       "and patrols take the shortest way between waypoints, however many (#7)." },
     { RULE_BUILD, "building", "More room to build",
-      "Hedges, walls and fences go under raised track, lamp posts and fountains go on paths, and track still builds in a full park "
+      "Hedges, walls and fences go under raised track and where people stand, lamp posts and fountains go on paths, "
+      "the camera scrolls 3 rows past the back of the park, and track still builds in a full park "
       "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
     { RULE_LIGHTS, "lights", "Lamps light up in the dark",
       "When rain and storms darken the park, lamp posts glow; the darker, the brighter. Only the picture changes (#18)." },
@@ -373,19 +374,58 @@ static int16_t chain_tail(int tile, int only_track) {   /* what ends the chain; 
     return i;
 }
 
+static int is_person(uint8_t ty) { return ty == 2 || ty == 8 || ty == 0x1A; }   /* guest, staff, thug */
+
+/* Whoever stands on tile t steps off to the nearest tile that is path (or,
+ * with grass, bare grass) and that skip(u) allows: 0 if there is none. */
+static int step_off(int t, int grass, int (*skip)(int u, int c), int c) {
+    for (int guard = 0; guard < 64; guard++) {
+        int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)t);
+        while (i > 0 && !is_person(M8(M32(PEOPLE) + (uint32_t)i * REC + 4)))   /* track stays */
+            i = (int16_t)M16(M32(PEOPLE) + (uint32_t)i * REC + 2);
+        if (i <= 0) return 1;
+        uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
+        int best = -1, bd = 999;
+        for (int u = 0; u < 4096; u++) {   /* ponytail: a whole-map scan, once per person moved */
+            if (u == t || skip(u, c) || (M8(M32(TILES) + 4u * (uint32_t)u + 3) & 8)) continue;
+            if (!(tflags(u) & 2) && !(grass && M8(M32(TILES) + 4u * (uint32_t)u + 2) == 0 && chain_tail(u, 0) == 0)) continue;
+            int d = abs(u % 64 - t % 64) + abs(u / 64 - t / 64);
+            if (d < bd) { bd = d; best = u; }
+        }
+        if (best < 0) return 0;
+        uint32_t a[3] = { q, (uint32_t)((best % 64) << 8 | 0x80), (uint32_t)((best / 64) << 8 | 0x80) };
+        guest_call(0x408A44, 3, a);
+    }
+    return 0;
+}
+static int skip_none(int u, int c) { (void)u; (void)c; return 0; }
+
+/* Fences also go where people stand (the grass by the gate, which guests
+ * cross all day, #15): they step aside when it is built. */
 void fence_place(void (*lifted)(void)) {
     int tile = (int)(M32(g_esp + 8) & 0xFFFF), commit = (int)M32(g_esp + 12);
     uint32_t t = M32(TILES) + 4u * (uint32_t)(tile & 4095);
     uint16_t f = tflags(tile & 4095);
     int16_t head = (int16_t)M16(t);
-    if (!(tp_rules & RULE_BUILD) || tile < 0 || tile >= 4096 || (M8(t + 3) & 8) || (f != 0 && f != 0x400) ||
-        head <= 0 || chain_tail(tile, 1) != 0) { lifted(); return; }
+    if (!(tp_rules & RULE_BUILD) || tile < 0 || tile >= 4096 || (M8(t + 3) & 8) || (f != 0 && f != 0x400) || head <= 0) {
+        lifted(); return;
+    }
+    int track = 0;
+    for (int16_t i = head, hops = 0; i > 0 && hops < 256; hops++) {   /* only track and people on it */
+        uint8_t ty = M8(M32(PEOPLE) + (uint32_t)i * REC + 4);
+        if (ty == 0x12) track = 1;
+        else if (!is_person(ty)) { lifted(); return; }
+        i = (int16_t)M16(M32(PEOPLE) + (uint32_t)i * REC + 2);
+    }
+    if (chain_tail(tile, 0) != 0 || (f == 0x400 && !track)) { lifted(); return; }
+    if (commit && !step_off(tile, 1, skip_none, 0)) { lifted(); return; }
+    head = (int16_t)M16(t);                        /* the track, or nothing, once they have gone */
     uint8_t type = M8(t + 2);
     M16(t) = 0; M8(t + 2) = 0;                    /* as if bare grass */
     lifted();
     M16(t) = (uint16_t)head;                       /* the track stays on it */
     if (!commit || !g_eax) M8(t + 2) = type;       /* no fence after all */
-    else rlog("fence under the track at %d,%d", tile % 64, tile / 64);
+    else rlog("fence %s at %d,%d", track ? "under the track" : "where people stood", tile % 64, tile / 64);
 }
 
 void lamp_place(void (*lifted)(void)) {
@@ -422,6 +462,25 @@ static void with_reserve(void (*lifted)(void)) {   /* a guest spawner, sees fewe
 void guest_spawn(void (*lifted)(void)) { with_reserve(lifted); }    /* 0x41845A */
 void guest_spawn2(void (*lifted)(void)) { with_reserve(lifted); }   /* 0x4564F1 */
 
+/* The camera past the back of the park (#15). The camera's row (0x4C6666)
+ * stops at 0, so the back wall sits under the date and the staff buttons and
+ * the rows by it are awkward to build on. run_lift.py lets it go 3 rows
+ * further with the rule (the edge scroll 0x4043EE, the keys' clamp 0x408583),
+ * and the pointer above the map picks row 0, not a row before it (0x404B90).
+ * The park view (0x40B837) would draw those rows from the memory before the
+ * tile table, another of the game's blocks: while it draws, they read as bare
+ * grass. */
+#define CAM_ROW 0x4C6666
+#define ABOVE_ROWS 4          /* the 3 rows, and one for anything tall */
+static void view_above(void (*lifted)(void)) {
+    if ((int16_t)M16(CAM_ROW) >= 0) { lifted(); return; }
+    static uint32_t keep[ABOVE_ROWS * 64];
+    uint32_t a = M32(TILES) - sizeof keep;
+    for (int k = 0; k < ABOVE_ROWS * 64; k++) { keep[k] = M32(a + 4u * k); M32(a + 4u * k) = 0; }
+    lifted();
+    for (int k = 0; k < ABOVE_ROWS * 64; k++) M32(a + 4u * k) = keep[k];
+}
+
 /* Fountains on paths (#21). A fountain is an object (type 0x18, +0xC kind 4)
  * on the middle tile of a 3x2 footprint (offsets at 0x4A8FBE: -65 -64 -63 -1
  * 0 +1); placing it (0x430E92(tile), the feature picked at 0x4C6646) needs
@@ -447,6 +506,7 @@ static void join_round(int centre) {          /* the paths on the footprint and 
 }
 
 static int in_foot(int centre, int t) { for (int k = 0; k < 6; k++) if (centre + foot[k] == t) return 1; return 0; }
+static int skip_foot(int u, int c) { return in_foot(c, u); }
 
 void fountain_place(void (*lifted)(void)) {
     int c = (int)(M32(g_esp + 4) & 0xFFFF), paths = 0;
@@ -469,23 +529,8 @@ void fountain_place(void (*lifted)(void)) {
     }
     if (!paths) { lifted(); return; }
     /* Off the footprint, to the nearest path outside it. */
-    for (int k = 0; k < 6; k++) {
-        int t = c + foot[k];
-        for (int guard = 0; guard < 64; guard++) {
-            int16_t i = (int16_t)M16(M32(TILES) + 4u * (uint32_t)t);
-            if (i <= 0) break;
-            uint32_t q = M32(PEOPLE) + (uint32_t)i * REC;
-            int best = -1, bd = 99;
-            for (int u = 0; u < 4096; u++) {
-                if (!(tflags(u) & 2) || in_foot(c, u)) continue;
-                int d = abs(u % 64 - t % 64) + abs(u / 64 - t / 64);
-                if (d < bd) { bd = d; best = u; }
-            }
-            if (best < 0) { lifted(); return; }
-            uint32_t a[3] = { q, (uint32_t)((best % 64) << 8 | 0x80), (uint32_t)((best / 64) << 8 | 0x80) };
-            guest_call(0x408A44, 3, a);
-        }
-    }
+    for (int k = 0; k < 6; k++)
+        if (!step_off(c + foot[k], 0, skip_foot, c)) { lifted(); return; }
     uint8_t type[6];
     for (int k = 0; k < 6; k++) { uint32_t t = M32(TILES) + 4u * (uint32_t)(c + foot[k]); type[k] = M8(t + 2); if (paths >> k & 1) M8(t + 2) = 0; }
     lifted();
@@ -720,7 +765,7 @@ static int park_drawn;            /* the park view was drawn since the last fram
 static int park_since;            /* ... and since the last frame shown */
 static volatile int lights_valid;  /* the frame on the screen is the park's */
 
-void park_view(void (*lifted)(void)) { park_drawn = park_since = 1; lifted(); }
+void park_view(void (*lifted)(void)) { park_drawn = park_since = 1; view_above(lifted); }
 
 /* game.c: the game shows a frame (its presents), or another screen draws its
  * own (the negotiations): the lights belong to a frame with the park in it. */

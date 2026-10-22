@@ -155,8 +155,16 @@ was hired in; give them patrols.
   fits, and the click does nothing. Track pieces are kept in the same table
   as the guests, which guests may fill to all but 100 places (and a second
   way guests arrive fills those too); every piece needs one.
+- A fence never goes on a tile someone is standing on. The grass by the gate,
+  which guests cross all day as they leave the path, can hardly be fenced.
+- The camera stops with the back wall of the park at the very top of the
+  screen, under the date and the staff buttons, so building along the back
+  is fiddly and the cursor keys can't scroll you any further.
 
-**With the rule:** fences of every kind go under raised track; lamp posts go
+**With the rule:** fences of every kind go under raised track, and where
+people stand (they step aside to the nearest grass or path); the camera
+scrolls 3 rows past the back wall, with grass drawn beyond it (the pointer
+there picks the wall's row, so nothing can be built off the map); lamp posts go
 on plain paths (not queues or bridges), and guests walk past them; fountains
 go on paths too, say in the middle of a square, with the paths round them
 joined up and anyone standing there stepping aside (take the fountain away

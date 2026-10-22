@@ -11,7 +11,8 @@ then runs headless with the rule off and on:
   guards   (2) a guard dropped elsewhere mid-escort: is her thug let go
   entertainers  the panel's counts after 5 minutes
   handymen a handyman dropped on a ride's footprint: does he find a path
-  building fences under the coaster, lamps and a fountain on a path
+  building fences under the coaster and where a guest stands, lamps and a
+           fountain on a path, the camera past the back of the park
   lights   the demo park in a storm: do the lamps glow
   deal     (a new park) staff negotiation, offer just under the demand: one cheer
 Needs game/ (setup) and a build. Takes a few minutes.
@@ -144,6 +145,17 @@ def building(exe):
     foot = [(x, y) for y in (51, 52) for x in (32, 33, 34)]
     ok &= check(all(kind(placed, x, y) == 0x8000 for x, y in foot) and all(kind(gone, x, y) == 2 for x, y in foot),
                 'building: a fountain on a path, and the path back')
+    # A guest put on the grass at (60,53) and a fence on that tile; then the
+    # camera at row 0 and the cursor key up five times.
+    stood = ['--call', '70:408a44:%x:3c80:3580' % GUEST, '--call', '70:4187d8:6c:d7c:1']
+    up = ['--poke', '60:4c6666=00', '--poke', '60:4c6667=00', '--watch', '4c6666']
+    up += sum((['--key', '%d:48' % t] for t in range(61, 66)), [])
+    off = run(exe, 'none', 71, stood + up)
+    on = run(exe, 'building', 71, stood + up)
+    ok &= check('call 004187d8 -> 00000000' in off and 'fence where people stood at 60,53' in on,
+                'building: a fence where a guest stands')
+    rows = lambda s: [int(v, 16) - (0x10000 if int(v, 16) > 0x7FFF else 0) for v in re.findall(r'004C6666 = (\w+)', s)]
+    ok &= check(min(rows(off)) == 0 and min(rows(on)) == -3, 'building: the camera 3 rows past the back')
     return ok
 
 
