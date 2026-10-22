@@ -3,8 +3,8 @@
 The park can be drawn wider than the game's 640x480: any width from 640 to
 1920 (in steps of 8), 480 high. The panel, the bar of icons along the bottom,
 stays 640 wide at the left, as do the game's own full screens (finance,
-research and the rest), which draw 640 wide with the park still showing to
-their right.
+research and the rest), which draw 640 wide with black to their right (the finance
+and other windows drawn over the park keep the park beside them).
 
 | How | |
 |---|---|
