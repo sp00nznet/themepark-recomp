@@ -72,7 +72,8 @@ const rule_t rule_list[] = {
     { RULE_ESC, "esc", "Esc closes windows",
       "Esc closes the open window, as the tick does: status, finance and the rest, not only the staff window (#43)." },
     { RULE_DEAL, "deal", "Handshake sounds wait for the deal",
-      "In a negotiation the heartbeat keeps going and the cheer waits until the hands have shaken, not just come close (#49)." },
+      "In a negotiation your hand moves twice as fast, the heartbeat keeps going and the cheer waits until the hands "
+      "have shaken, not just come close (#49)." },
     { RULE_ENGINEERS, "engineers", "Engineers reach their rides",
       "Engineers take the shortest way to a broken ride and round it, past hedges, walls and fences, put the hoardings up "
       "and down twice as fast, and after a repair walk to the nearest free patch of grass (#40)." },
@@ -1082,8 +1083,8 @@ void rules_frame(void) {   /* game.c, between frames on the game thread */
  * good, and every frame the two meet the cheer is asked for again. With the
  * rule both wait for the deal, which runs the same branch once it closes. */
 static int deal_pending(void) {
-    uint16_t s = M16(0x4C6652);                    /* 0x32 staff, 0x4E goods */
-    return (tp_rules & RULE_DEAL) && (s == 0x32 || s == 0x4E) && (int32_t)M32(g_ebp - 0x50) > 0 &&
+    extern uint32_t g_cur_func;                    /* in an override: the caller; staff and goods alike */
+    return (tp_rules & RULE_DEAL) && g_cur_func >= 0x434EA5u && g_cur_func < 0x436F27u && (int32_t)M32(g_ebp - 0x50) > 0 &&
            (int32_t)M32(0x4C7804) <= (int32_t)M32(0x4C77FC) && (int16_t)M16(g_ebp - 0x44) > (int16_t)M16(g_ebp - 0x20);
 }
 

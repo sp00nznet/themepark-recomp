@@ -283,6 +283,13 @@ SCREEN_SITES.update({
     0x00408598: ('(uint32_t)(0x40u)', "tp_cam_limit('b') + 1"),
     0x004085A2: ('(uint16_t)(0x3Fu)', "tp_cam_limit('b')"),
 })
+# Negotiation (#49): with the deal rule (RULE_DEAL = 256) the player's hand
+# (offer 0x4C77FC, from the floor 0x4C77F8 up to 0x4C7800) moves 4 a frame,
+# not 2, without passing either end. The countdown is untouched.
+SCREEN_SITES.update({
+    0x00435546: ('MEM32(0x4C77FC) - 2', 'MEM32(0x4C77FC) - (tp_rules & 256u && (int32_t)MEM32(0x4C77FC) - 4 >= (int32_t)MEM32(0x4C77F8) ? 4u : 2u)'),
+    0x00435658: ('MEM32(0x4C77FC) + 2', 'MEM32(0x4C77FC) + (tp_rules & 256u && (int32_t)MEM32(0x4C77FC) + 4 <= (int32_t)MEM32(0x4C7800) ? 4u : 2u)'),
+})
 SCREEN_SITES.update({
     0x004023C0: ('ecx = 0x2C00u;', '@tp_present_tail'),
     0x0040AF68: ('ecx = 0x2C00u;', '@tp_present_tail'),
