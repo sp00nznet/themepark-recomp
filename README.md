@@ -58,10 +58,10 @@ What this adds to the 1994 DOS game, beyond running it natively:
 
 ## Status
 
-**v0.1.0 — alpha.** The whole game is lifted (6,517 functions, no lift errors)
+**v0.6.0.** The whole game is lifted (6,517 functions, no lift errors)
 and runs from the title through the name prompt, menus, new-game setup and
-world map into a running park. It has not been played for long by a person
-yet. Sound effects and music play through the host (HMI SOS replaced;
+world map into a running park, and a tester has been playing it since 0.2
+(their reports are the GitHub issues). Sound effects and music play through the host (HMI SOS replaced;
 [docs/sound.md](docs/sound.md)). What is next is on the [roadmap](ROADMAP.md).
 
 | Area | State |

@@ -3,11 +3,34 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-26
+
+First release without the alpha tag.
+
+### Added
+- F10, *Sound effects* (#41): the "ewww" (HURRAY, played when guests walk
+  over sick; no longer part of *Cheering*), the research bell, and the bus
+  arriving and leaving. Effects are now named from the sound bank's table,
+  and `TP_SNDLOG` prints each effect's number and caller.
+
+### Changed
+- **Handshake sounds wait for the deal** (`deal`, #49) also makes your hand
+  move twice as fast; the time limit is unchanged.
+- **More room to build** (#15): the cursor keys stop at the same park edges
+  as mouse scrolling (the 1994 limit let the camera run far off the right
+  and below the gate).
 
 ### Fixed
+- **Handshake sounds wait for the deal** (#49) now works in supplier (goods)
+  negotiations too, not only staff ones.
 - **Esc closes windows** (`esc`, #43) now also leaves the research screen,
   the stock market, the bank statement and the world map.
+- **More room to build** (#21): the bulldozer takes a lamp or fountain
+  before the path under it, even when a guest is standing there.
+- Wide parks (#51): the park map opened from the top menu no longer draws a
+  corrupted background.
+- Network game (#37): when port 7790 is taken or reserved, the host uses the
+  next free port and says which; two hosts on one PC no longer share a port.
 
 ## [0.5.0-alpha.1] - 2026-10-22
 
