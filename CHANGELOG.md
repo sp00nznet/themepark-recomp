@@ -5,6 +5,10 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Esc closes windows** (`esc`, #43) now also leaves the research screen,
+  the stock market, the bank statement and the world map.
+
 ## [0.5.0-alpha.1] - 2026-10-22
 
 ### Added

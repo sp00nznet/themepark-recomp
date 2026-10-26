@@ -1027,6 +1027,33 @@ static void esc_keys(void) {
         M8(0x4A7537 + esc_actions[i] * 6 + 4) = (tp_rules & RULE_ESC) ? 0x01 : 0xFF;
 }
 
+/* Esc on the full screens, which the ticks' hotkey doesn't reach (#43):
+ * - research (0x4E) and the bank statement (0x40) close on Enter, not Esc;
+ * - the stock market (0x44) and the world map (from the park, not the new
+ *   game's) close only on a click on their tick, so Esc clicks it (the
+ *   pointer moves there). */
+static int in_world_map;
+void world_map(void (*lifted)(void)) {         /* 0x4460D2(): the world map's loop */
+    in_world_map = 1;
+    lifted();
+    in_world_map = 0;
+}
+
+static void esc_click(int x, int y) {
+    M16(0x4AECAC) = (uint16_t)x; M16(0x4AECAE) = (uint16_t)y; M16(0x4CE5AC) = 1;
+    M8(0x4CE688) = 0; g_eax &= ~0xFFu;
+}
+
+void key_read(void (*lifted)(void)) {          /* 0x46E888(): the poll reads a key */
+    lifted();
+    if (!(tp_rules & RULE_ESC) || M8(0x4CE688) != 1) return;
+    uint16_t s = M16(0x4C6652);
+    rlog("esc: screen %02x%s", s, in_world_map ? ", world map" : "");
+    if (s == 0x4E || s == 0x40) { M8(0x4CE688) = 0x1C; g_eax = (g_eax & ~0xFFu) | M8(0x4AECE0 + 0x1C); }
+    else if (s == 0x44) esc_click(0x238 + 24, 0x148 + 15);                 /* 0x43BC83 */
+    else if (s == 0 && in_world_map) esc_click(0x238 + 29, 0x16E + 10);    /* 0x44644F */
+}
+
 void rules_frame(void) {   /* game.c, between frames on the game thread */
     lights_frame();
     esc_keys();
