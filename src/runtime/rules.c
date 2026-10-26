@@ -65,7 +65,7 @@ const rule_t rule_list[] = {
       "and patrols take the shortest way between waypoints, however many (#7)." },
     { RULE_BUILD, "building", "More room to build",
       "Hedges, walls and fences go under raised track and where people stand, lamp posts and fountains go on paths, "
-      "the camera scrolls 3 rows past the back of the park, and track still builds in a full park "
+      "the camera scrolls 3 rows past the back of the park (and the cursor keys stop at its other edges), and track still builds in a full park "
       "(the guests leave room for 150 more pieces) (#23, #21, #15)." },
     { RULE_LIGHTS, "lights", "Lamps light up in the dark",
       "When rain and storms darken the park, lamp posts glow; the darker, the brighter. Only the picture changes (#18)." },
@@ -593,7 +593,21 @@ void guest_spawn2(void (*lifted)(void)) { with_reserve(lifted); }   /* 0x4564F1 
  * tile table, another of the game's blocks: while it draws, they read as bare
  * grass. */
 #define CAM_ROW 0x4C6666
-#define ABOVE_ROWS 4          /* the 3 rows, and one for anything tall */
+
+/* The cursor keys' clamp (0x4084DF) lets the camera go to column and row 63,
+ * far off the right of the park and below the gate, and to column 0, past
+ * the left; the edge scroll stops at the park's edges (0x404397..0x40444D).
+ * With the rule the keys stop where the edge scroll does (#15): 'l'eft,
+ * 'r'ight, 'b'ottom, each the last column or row the camera may take. */
+int32_t tp_cam_limit(int edge) {
+    extern int32_t tp_w, tp_h;
+    int32_t w = (int16_t)M16(0x4C663A), h = (int16_t)M16(0x4C6654);
+    if (edge == 'l') return tp_rules & RULE_BUILD ? 4 : 0;
+    if (!(tp_rules & RULE_BUILD) || w <= 0 || h <= 0) return 0x3F;
+    if (edge == 'r') return 64 - tp_w / w;
+    return 64 - (h + ((M8(0x4CE5F6) & 1) ? 400 : tp_h) - 1) / h;
+}
+#define ABOVE_ROWS 4         /* the 3 rows, and one for anything tall */
 static void view_above(void (*lifted)(void)) {
     if ((int16_t)M16(CAM_ROW) >= 0) { lifted(); return; }
     static uint32_t keep[ABOVE_ROWS * 64];
@@ -670,11 +684,33 @@ void fountain_place(void (*lifted)(void)) {
 }
 
 /* The bulldozer (0x4105D7(tile)) takes a fountain away from any of its tiles,
- * and leaves the middle one grass after the fountain's own removal. */
+ * and leaves the middle one grass after the fountain's own removal. A lamp on
+ * a path goes before the path (#21): the game takes the lamp only when the
+ * chain starts with it, so with someone on the tile it took the path instead
+ * and left the lamp on the grass. With the rule the bulldozer sees the lamp
+ * alone, and whoever stands there stays. */
 void bulldoze(void (*lifted)(void)) {
     int t = (int)(M32(g_esp + 4) & 0xFFFF), c = -1;
     uint32_t q = 0;
     uint16_t mark = 0;
+    if ((tp_rules & RULE_BUILD) && t < 4096 && (tflags(t) & 2)) {
+        uint32_t a = M32(TILES) + 4u * (uint32_t)t;
+        int16_t head = (int16_t)M16(a), tail = chain_tail(t, 0);
+        if (head > 0 && tail < 0 && tail >= -11) {
+            M16(a) = (uint16_t)tail;
+            lifted();
+            uint16_t left = M16(a);                    /* 0 once the lamp has gone */
+            M16(a) = (uint16_t)head;
+            int16_t i = head;
+            for (int hops = 0; hops < 256; hops++) {   /* the last person now ends in it */
+                uint32_t r = M32(PEOPLE) + (uint32_t)i * REC;
+                if ((int16_t)M16(r + 2) <= 0) { M16(r + 2) = left; break; }
+                i = (int16_t)M16(r + 2);
+            }
+            rlog("bulldozer: the lamp at %d,%d before the path", t % 64, t / 64);
+            return;
+        }
+    }
     for (int k = 0; k < 6 && c < 0 && (tp_rules & RULE_BUILD); k++) {   /* the fountain this tile is part of */
         int cc = t - foot[k];
         if (cc < 0 || cc >= 4096) continue;
