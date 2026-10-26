@@ -78,7 +78,8 @@ const effect_group effect_groups[] = {
     { "sick", "Being sick", "SICK" },
     { "thugs", "Thugs' motorbikes", "THUGBKE" },
     { "crying", "Crying", "CRY" },
-    { "cheers", "Cheering", "HURRAY HURRAY1 HURRAY2" },
+    { "cheers", "Cheering", "HURRAY1 HURRAY2" },
+    { "ewww", "Guests passing sick (\"ewww\")", "HURRAY" },
     { "laughs", "Laughing and giggling", "LAUGH GIGGLE" },
     { "screams", "Screams on rides", "CSTSCRM" },
     { "toilets", "Toilets", "FLUSH" },
@@ -87,6 +88,8 @@ const effect_group effect_groups[] = {
     { "hammer", "Engineers hammering", "HAMMER" },
     { "lifts", "Coaster lift chains", "RATCHET" },
     { "fireworks", "Fireworks", "ROCKET EXPLOD3" },
+    { "research", "Research done (the bell)", "RESRCH" },
+    { "bus", "The bus coming and going", "BUSCOME BUSAWAY" },
 };
 const int effect_group_count = sizeof effect_groups / sizeof effect_groups[0];
 uint32_t effects_muted;
@@ -102,9 +105,23 @@ void effects_save(const char* ini) {
         WritePrivateProfileStringA("sounds", effect_groups[i].key, effects_muted >> i & 1 ? "0" : "1", ini);
 }
 
+uint32_t fx_from; int fx_id;    /* the effect being started (effect_note), else 0 */
+
+/* The effect's name: its entry in the SNDS bank's table ([0x4C7B60], 32 bytes
+ * each, "NAME.RAW" at +0) when it came through the game's effect calls, else
+ * by its bytes. HURRAY is the "ewww" at sick on a path (0x40CF50). */
+static const char* effect_name(const uint8_t* data, uint32_t len) {
+    static char n[13];
+    if (!fx_from || fx_id <= 0 || fx_id > (int)M16(0x4C7B68)) return music_effect_name(data, len);
+    memcpy(n, dos32_mem(M32(0x4C7B60) + (uint32_t)fx_id * 32), 12);
+    n[12] = 0;
+    if (strchr(n, '.')) *strchr(n, '.') = 0;
+    return n;
+}
+
 static int effect_muted(const uint8_t* data, uint32_t len) {
     if (!effects_muted) return 0;
-    const char* name = music_effect_name(data, len);
+    const char* name = effect_name(data, len);
     size_t n = strlen(name);
     for (int i = 0; n && i < effect_group_count; i++) {
         if (!(effects_muted >> i & 1)) continue;
@@ -112,6 +129,16 @@ static int effect_muted(const uint8_t* data, uint32_t len) {
             if ((w == effect_groups[i].names || w[-1] == ' ') && (w[n] == ' ' || !w[n])) return 1;
     }
     return 0;
+}
+
+/* The game's two effect calls, 0x470C80 (in the park) and 0x470FE0 (rules.c),
+ * take (pan, effect). Note who asked, for the log and the caller-keyed groups. */
+extern uint32_t g_cur_func;     /* in an override: the lifted function that called it */
+void effect_note(void (*lifted)(void)) {
+    uint32_t from = fx_from; int id = fx_id;
+    fx_from = g_cur_func; fx_id = (int)(ARG(1) & 0xFFFF);
+    lifted();
+    fx_from = from; fx_id = id;
 }
 
 /* sosDIGIStartSample(h, far *sample) -> sample id. The struct (0x4AA729):
@@ -125,8 +152,8 @@ void sos_digi_start(void (*lifted)(void)) {
     int variant = M8(sound_variant_va);
     int rate = variant == 2 ? 44100 : variant == 1 ? 22050 : 11025;
     int loop = !(flags & 0x4000) ? 0 : loops == 0xFFFF ? -1 : loops > 0 ? loops - 1 : 0;
-    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d ret %08X %s%s\n", frame_no / 70.0, id, data, len, loops, flags, vol, M32(g_esp),
-                                     music_effect_name(dos32_mem(data), len), effect_muted(dos32_mem(data), len) ? " (off)" : "");
+    if (getenv("TP_SNDLOG")) fprintf(stderr, "[snd] %.2f start id %d data %08X len %u loops %d flags %04X vol %d fx %02X from %06X %s%s\n", frame_no / 70.0, id, data, len, loops, flags, vol, fx_id, fx_from,
+                                     effect_name(dos32_mem(data), len), effect_muted(dos32_mem(data), len) ? " (off)" : "");
     audio_stop(voice_of[id]);
     voice_of[id] = sound_mute || effect_muted(dos32_mem(data), len) ? 0 : audio_play(dos32_mem(data), len, variant == 2 ? 16 : 8, variant == 2, rate,
                                                 vol >> 8, 64, loop);

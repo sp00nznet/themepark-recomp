@@ -1031,5 +1031,6 @@ void song_stop(void (*lifted)(void)) {          /* 0x470990() */
 
 void effect_start(void (*lifted)(void)) {       /* 0x470FE0(pan, effect): 0x27 the cheer */
     if (M32(g_esp + 8) == 0x27 && deal_pending()) { rlog("deal: cheer held"); g_esp += 4; return; }
-    lifted();
+    extern void effect_note(void (*)(void));     /* sound.c */
+    effect_note(lifted);
 }

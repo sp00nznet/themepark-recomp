@@ -64,9 +64,11 @@ carries the effects.
 
 F10, *Sound effects* (on Linux, *More*, *Sound effects*) turns groups of
 effects on and off: sales (CASH), booing (GRPBOO*), being sick (SICK),
-thugs' motorbikes (THUGBKE), crying, cheering, laughing, screams on rides,
-toilets, thunder, buttons, engineers hammering (HAMMER), coaster lift
-chains (RATCHET) and fireworks (ROCKET, EXPLOD3). They are kept in `themepark.ini`:
+thugs' motorbikes (THUGBKE), crying, cheering (HURRAY1, HURRAY2), the
+"ewww" of guests walking over sick (HURRAY, effect 0x26 from 0x40CF50),
+laughing, screams on rides, toilets, thunder, buttons, engineers hammering
+(HAMMER), coaster lift chains (RATCHET), fireworks (ROCKET, EXPLOD3), the
+research bell (RESRCH) and the bus (BUSCOME, BUSAWAY). They are kept in `themepark.ini`:
 
 ```ini
 [sounds]
@@ -74,10 +76,13 @@ sales=0
 sick=0
 ```
 
-The game only hands the mixer a pointer to the sample, so `sound.c` names it
-by matching its first 64 bytes against the SNDS banks (`music_effect_name`,
-which also looks up songs), and an effect that is off is not played. The game
-sees it start and finish as usual. `TP_SNDLOG=1` prints each effect's name.
+Nearly every effect starts through 0x470C80 or 0x470FE0 (pan, effect), with
+the effect's index into the SNDS bank's table (`[0x4C7B60]`, 32 bytes each,
+the file name at +0); `sound.c` notes it there and names the sample from that
+table. Anything else is named by matching its first 64 bytes against the
+SNDS banks (`music_effect_name`, which also looks up songs). An effect that
+is off is not played. The game
+sees it start and finish as usual. `TP_SNDLOG=1` prints each effect's name, index and calling function.
 
 ## Music
 
