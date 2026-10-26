@@ -452,12 +452,37 @@ static void connect_all(void) {
             resync = 1;                           /* back to a checkpoint, once everyone is here */
             read_list();
         } else game_id = (uint32_t)time(NULL) * 2654435761u ^ (uint32_t)getpid();
-        listener = socket(AF_INET, SOCK_STREAM, 0);
-        int one = 1;
-        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof one);
-        struct sockaddr_in a = { 0 };
-        a.sin_family = AF_INET; a.sin_port = htons((uint16_t)net_port); a.sin_addr.s_addr = INADDR_ANY;
-        if (bind(listener, (struct sockaddr*)&a, sizeof a) || listen(listener, 4)) die("cannot listen on that port");
+        /* The port may be taken (a second copy hosting on this PC) or reserved by
+         * Windows (Hyper-V/WSL reserve port ranges): try the next few (#37). */
+        int want = net_port;
+        for (;; net_port++) {
+            listener = socket(AF_INET, SOCK_STREAM, 0);
+            int one = 1;
+#ifdef _WIN32
+            setsockopt(listener, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char*)&one, sizeof one);   /* REUSEADDR lets two hosts share it */
+#else
+            setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof one);
+#endif
+            struct sockaddr_in a = { 0 };
+            a.sin_family = AF_INET; a.sin_port = htons((uint16_t)net_port); a.sin_addr.s_addr = INADDR_ANY;
+            if (!bind(listener, (struct sockaddr*)&a, sizeof a) && !listen(listener, 4)) break;
+            closesocket(listener);
+            if (net_port == want + 9) {
+                char m[160];
+                snprintf(m, sizeof m, "cannot listen on ports %d-%d (all in use or reserved); try --port with another number", want, net_port);
+                die(m);
+            }
+        }
+        if (net_port != want) {
+            char m[200];
+            snprintf(m, sizeof m, "Port %d is in use, so this game is on port %d.\n"
+                     "Players joining type the address with :%d at the end.", want, net_port, net_port);
+            fprintf(stderr, "themepark: network: %s\n", m);
+#ifdef _WIN32
+            extern int sound_headless;
+            if (!sound_headless) MessageBoxA(NULL, m, "Theme Park - network game", MB_OK | MB_ICONINFORMATION);
+#endif
+        }
         up[0] = 1; listed[0] = 1;
         for (int got = 1; got < net_n; ) {
             fprintf(stderr, "themepark: network: waiting for %d more player%s on port %d\n",
