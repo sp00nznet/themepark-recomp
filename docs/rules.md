@@ -218,7 +218,10 @@ cheer comes again at the next near miss.
 
 **With the rule:** stopping the song (0x470990) and the cheer (effect 0x27 at
 0x470FE0) are held back while the deal is still pending, so the heartbeat
-runs on and the crowd cheers once, at the handshake. Only the sound changes.
+runs on and the crowd cheers once, at the handshake. Your hand also moves
+twice as fast (4 a frame instead of 2, 0x435546/0x435658 in run_lift.py), so
+crossing the whole range takes 125 frames of the 620-frame countdown, not 250; the countdown
+itself is unchanged.
 
 ### Engineers reach their rides (`engineers`, issue #40)
 

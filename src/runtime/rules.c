@@ -72,7 +72,8 @@ const rule_t rule_list[] = {
     { RULE_ESC, "esc", "Esc closes windows",
       "Esc closes the open window, as the tick does: status, finance and the rest, not only the staff window (#43)." },
     { RULE_DEAL, "deal", "Handshake sounds wait for the deal",
-      "In a negotiation the heartbeat keeps going and the cheer waits until the hands have shaken, not just come close (#49)." },
+      "In a negotiation your hand moves twice as fast, the heartbeat keeps going and the cheer waits until the hands "
+      "have shaken, not just come close (#49)." },
     { RULE_ENGINEERS, "engineers", "Engineers reach their rides",
       "Engineers take the shortest way to a broken ride and round it, past hedges, walls and fences, put the hoardings up "
       "and down twice as fast, and after a repair walk to the nearest free patch of grass (#40)." },
