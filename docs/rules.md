@@ -159,13 +159,17 @@ was hired in; give them patrols.
   which guests cross all day as they leave the path, can hardly be fenced.
 - The camera stops with the back wall of the park at the very top of the
   screen, under the date and the staff buttons, so building along the back
-  is fiddly and the cursor keys can't scroll you any further.
+  is fiddly and the cursor keys can't scroll you any further. The cursor
+  keys, though, scroll far off the right of the park and below the gate.
+- With someone standing on it, the bulldozer takes a path before the lamp on it.
 
 **With the rule:** fences of every kind go under raised track, and where
 people stand (they step aside to the nearest grass or path); the camera
 scrolls 3 rows past the back wall, with grass drawn beyond it (the pointer
-there picks the wall's row, so nothing can be built off the map); lamp posts go
-on plain paths (not queues or bridges), and guests walk past them; fountains
+there picks the wall's row, so nothing can be built off the map), and the
+cursor keys stop at the park's other edges where the mouse does; lamp posts go
+on plain paths (not queues or bridges), guests walk past them, and the
+bulldozer takes the lamp before the path; fountains
 go on paths too, say in the middle of a square, with the paths round them
 joined up and anyone standing there stepping aside (take the fountain away
 and the path comes back; a litter bin in the way has to go first); and the

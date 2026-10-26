@@ -152,12 +152,23 @@ def building(exe):
     stood = ['--call', '70:408a44:%x:3c80:3580' % GUEST, '--call', '70:4187d8:6c:d7c:1']
     up = ['--poke', '60:4c6666=00', '--poke', '60:4c6667=00', '--watch', '4c6666']
     up += sum((['--key', '%d:48' % t] for t in range(61, 66)), [])
+    up += sum((['--key', '%.2f:4d' % (66 + i * 0.1)] for i in range(40)), []) + ['--watch', '4c667a']   # then right
     off = run(exe, 'none', 71, stood + up)
     on = run(exe, 'building', 71, stood + up)
     ok &= check('call 004187d8 -> 00000000' in off and 'fence where people stood at 60,53' in on,
                 'building: a fence where a guest stands')
-    rows = lambda s: [int(v, 16) - (0x10000 if int(v, 16) > 0x7FFF else 0) for v in re.findall(r'004C6666 = (\w+)', s)]
+    rows = lambda s, a='004C6666': [int(v, 16) - (0x10000 if int(v, 16) > 0x7FFF else 0) for v in re.findall(a + r' = (\w+)', s)]
     ok &= check(min(rows(off)) == 0 and min(rows(on)) == -3, 'building: the camera 3 rows past the back')
+    ok &= check(max(rows(off, '004C667A')) == 63 and max(rows(on, '004C667A')) == 51,
+                'building: the cursor keys stop at the right edge')
+    # A lamp on the path at 31,46 and a guest put on it: the bulldozer takes the lamp, not the path.
+    lamp = ['--poke', '69:4c6646=02', '--poke', '69:4c6647=00', '--call', '69.6:430da6:b9f',
+            '--call', '70:408a44:%x:1f80:2e80' % GUEST, '--call', '70.1:4105d7:b9f']
+    d = dump_bytes(exe, 'building', 71, lamp, 70.5)
+    tiles = struct.unpack_from('<I', d, 0x4C3B08 - 0x400000)[0]
+    head, ty = struct.unpack_from('<hB', d, tiles + 0xB9F * 4 - 0x400000)
+    ok &= check(head == 0 and struct.unpack_from('<H', d, 0x4A44D9 + ty * 4 - 0x400000)[0] == 2,
+                'building: the bulldozer takes a lamp before its path')
     return ok
 
 

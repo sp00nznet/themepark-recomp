@@ -274,6 +274,13 @@ SCREEN_SITES.update({
     0x00408583: ('(uint32_t)(0)', CAM_TOP),
     0x0040858D: ('(uint16_t)(0)', CAM_TOP),
     0x00404B90: ('(uint16_t)(0)', '((int16_t)MEM16(0x4C6666) < 0 ? -(int16_t)MEM16(0x4C6666) : 0)'),
+    # The cursor keys' clamp stops where the edge scroll does (rules.c tp_cam_limit).
+    0x0040855B: ('(uint32_t)(0)', "tp_cam_limit('l')"),
+    0x00408565: ('(uint16_t)(0)', "tp_cam_limit('l')"),
+    0x00408570: ('(uint32_t)(0x40u)', "tp_cam_limit('r') + 1"),
+    0x0040857A: ('(uint16_t)(0x3Fu)', "tp_cam_limit('r')"),
+    0x00408598: ('(uint32_t)(0x40u)', "tp_cam_limit('b') + 1"),
+    0x004085A2: ('(uint16_t)(0x3Fu)', "tp_cam_limit('b')"),
 })
 SCREEN_SITES.update({
     0x004023C0: ('ecx = 0x2C00u;', '@tp_present_tail'),
@@ -310,7 +317,7 @@ def patch_screen_sites(out):
                         lines[j] = lines[j].replace(const, '(uint32_t)(' + var + ')')
             done.add(int(m.group(1), 16))
         lines.insert(lines.index('#include "recomp_funcs.h"') + 1,
-                     'extern int32_t tp_w, tp_h, tp_vh;\nextern uint32_t tp_rules;\nvoid tp_present_tail(void);\nvoid tp_clear_tail(void);')
+                     'extern int32_t tp_w, tp_h, tp_vh;\nextern uint32_t tp_rules;\nint32_t tp_cam_limit(int edge);\nvoid tp_present_tail(void);\nvoid tp_clear_tail(void);')
         open(p, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
     missing = set(SCREEN_SITES) - done
     if missing:
