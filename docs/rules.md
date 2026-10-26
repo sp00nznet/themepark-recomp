@@ -207,6 +207,14 @@ has a hotkey (the table at 0x4A7537, 6 bytes an action: two sprites, the
 key, a kind); the windows' ticks (actions 3 and 0x18) have none, and the
 rule gives them Esc.
 
+The full screens don't use those buttons. Research (0x4E) and the bank
+statement (0x40) close on Enter or Space, so with the rule Esc reads as
+Enter there (the key read, 0x46E888). The stock market (0x44, tick at
+0x43BC83) and the world map from the park (its loop 0x4460D2, tick at
+0x44644F) close only on a click on the tick, so Esc clicks it; the pointer
+is left there. The stock screen and the park map already close on Esc.
+Alt+Esc is Windows' own window switch and never reaches the game.
+
 ### Handshake sounds wait for the deal (`deal`, issue #49)
 
 **In 1994:** in a negotiation (0x434EA5), the moment the offer reaches the

@@ -197,7 +197,14 @@ def lights(exe):
 def esc(exe):
     # the status window's tick (action 3, hotkey at 0x4A7537 + 3*6 + 4): Esc with the rule
     key = {r: dump_bytes(exe, r, 20, [], 20)[0x4A7537 + 3 * 6 + 4 - 0x400000] for r in ('none', 'esc')}
-    return check(key == {'none': 0xFF, 'esc': 0x01}, 'esc: the windows\' ticks answer Esc')
+    ok = check(key == {'none': 0xFF, 'esc': 0x01}, 'esc: the windows\' ticks answer Esc')
+    # the full screens, opened as the top menu does (0x40B23A): research (0x4E), the stock market
+    # (0x44); Esc at 60 s. The screen word 0x4C6652 is back to the park (0) with the rule only.
+    for scr in ('4e', '44'):
+        st = {r: dump_bytes(exe, r, 62, ['--call', '56:40b23a:' + scr, '--key', '60:01'], 61.5)[0x4C6652 - 0x400000]
+              for r in ('none', 'esc')}
+        ok = check(st == {'none': int(scr, 16), 'esc': 0}, 'esc: screen %s closes on Esc' % scr) and ok
+    return ok
 
 
 def deal(exe):
