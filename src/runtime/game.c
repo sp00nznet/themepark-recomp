@@ -284,15 +284,18 @@ void screen_update(void (*lifted)(void)) {
  * pictures that 0x445EFA(src, dst, rows) doubles into the 640x480 back buffer,
  * rows of 640 one after another, then clears the 80 rows below. Wider, that
  * shears the picture across the screen (#11), so double it at the screen's
- * pitch here. Its registers are all saved, so nothing else changes. */
+ * pitch here. Its registers are all saved, so nothing else changes.
+ * Last row first, right to left: the park map from the top bar doubles its
+ * picture in place (src == dst), and top-down overwrote the picture (#51).
+ * (The game's own forward loop smears it to one colour; 640 keeps that.) */
 void double_screen(void (*lifted)(void)) {
     uint32_t src = M32W(g_esp + 4), dst = M32W(g_esp + 8);
     unsigned rows = *(uint16_t*)dos32_mem(g_esp + 12);
     if (tp_w == 640 || (*dos32_mem(0x4CE5F6) & 1) || dst == 0xA0000) { lifted(); return; }
-    for (unsigned y = 0; y < rows; y++) {
+    for (unsigned y = rows; y-- > 0; ) {
         const uint8_t* s = dos32_mem(src + (y / 2) * 320);
         uint8_t* d = dos32_mem(dst + y * tp_w);
-        for (int x = 0; x < 640; x++) d[x] = s[x / 2];
+        for (int x = 640; x-- > 0; ) d[x] = s[x / 2];
         memset(d + 640, 0, tp_w - 640);   /* black beside it, not a frozen park (#11) */
     }
     if (rows >= 400) memset(dos32_mem(dst + rows * tp_w), 0, 80 * tp_w);
