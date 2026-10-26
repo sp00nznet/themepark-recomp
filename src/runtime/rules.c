@@ -1020,8 +1020,8 @@ void rules_frame(void) {   /* game.c, between frames on the game thread */
  * good, and every frame the two meet the cheer is asked for again. With the
  * rule both wait for the deal, which runs the same branch once it closes. */
 static int deal_pending(void) {
-    uint16_t s = M16(0x4C6652);                    /* 0x32 staff, 0x4E goods */
-    return (tp_rules & RULE_DEAL) && (s == 0x32 || s == 0x4E) && (int32_t)M32(g_ebp - 0x50) > 0 &&
+    extern uint32_t g_cur_func;                    /* in an override: the caller; staff and goods alike */
+    return (tp_rules & RULE_DEAL) && g_cur_func >= 0x434EA5u && g_cur_func < 0x436F27u && (int32_t)M32(g_ebp - 0x50) > 0 &&
            (int32_t)M32(0x4C7804) <= (int32_t)M32(0x4C77FC) && (int16_t)M16(g_ebp - 0x44) > (int16_t)M16(g_ebp - 0x20);
 }
 
