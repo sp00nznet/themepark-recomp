@@ -274,6 +274,7 @@ SCREEN_SITES.update({
     0x004043EE: ('(uint32_t)(0)', CAM_TOP),
     0x00408583: ('(uint32_t)(0)', CAM_TOP),
     0x0040858D: ('(uint16_t)(0)', CAM_TOP),
+    0x0043751C: ('(uint32_t)(0)', CAM_TOP),   # the edge scroll while laying track (0x437268)
     0x00404B90: ('(uint16_t)(0)', '((int16_t)MEM16(0x4C6666) < 0 ? -(int16_t)MEM16(0x4C6666) : 0)'),
     # The cursor keys' clamp stops where the edge scroll does (rules.c tp_cam_limit).
     0x0040855B: ('(uint32_t)(0)', "tp_cam_limit('l')"),
