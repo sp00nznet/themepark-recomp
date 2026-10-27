@@ -33,6 +33,13 @@
 #define RESEARCH_ICON 0x4C7768   /* 1: the research button flashes */
 #define CAT_AWARD 0x0F       /* ledger categories: "Cash award" */
 #define CAT_MISC  0x18       /* "Misc." */
+#define LEVEL     0x4C66F1   /* the game type: 0 sandbox, 1 simulation, 2 full (new games: 0x40A0C8) */
+#define NAMES     0x4C7B98   /* LANG group 1: the parks' owners ("HUMAN", then the rivals') */
+#define PLAYER_REC 0x4C443C  /* 0x6C2 a player, synced: +0x20 the park's name */
+#define MY_NAME   0x4C66B0   /* this player's name, as typed at the start */
+#define NAME_BUF  0x4C6586   /* 4 x 0x20: the end of the 5th player record, unused (4 players at most) */
+
+static int host_level = -1;
 
 extern char state_note[128];             /* game.c: the title bar */
 extern volatile DWORD state_note_until;
@@ -98,6 +105,63 @@ void net_action_do(int from, const net_action_t* a) {
         M8(RESEARCH_ICON) = 1;
         snprintf(t, sizeof t, "Player %d shared a new %s with you", from + 1, table[tb].what); note(t);
         break; }
+    case ACT_LEVEL:
+        if (from == 0 && a->arg >= 0 && a->arg <= 2) host_level = a->arg;
+        break;
+    }
+}
+
+/* The game type (sandbox, simulation, full) is each machine's own in the 1994
+ * game: here the host's is everyone's (#37). Its ticks in the menu, too. */
+static void set_level(int l) {
+    M8(LEVEL) = (uint8_t)l;
+    M8(0x4C7761) = l == 0; M8(0x4C7759) = l == 1; M8(0x4C775E) = l == 2;
+}
+
+static void level_frame(void) {
+    static int sent = -1;
+    if (net_me == 0) {
+        int l = M8(LEVEL);
+        if (l != sent)
+            for (int p = 1; p < net_n; p++) net_send_action(p, &(net_action_t){ ACT_LEVEL, {0}, 0, l });
+        sent = l;
+    } else if (host_level >= 0 && M8(LEVEL) != host_level) {
+        set_level(host_level);
+        note("The host picks the game type");
+    }
+}
+
+/* A player's park was "HUMAN" to the others (the first of the owners' names,
+ * LANG group 1, picked by the park's +1 byte, which is its number), as in
+ * "HUMAN HAS JUST BOUGHT SOME SHARES". Now the name each player typed at the
+ * start, which only that machine knows, so it is sent round; until it comes,
+ * their park's name, from their record, which every sync carries (#37). */
+static uint32_t name_was[4];             /* the game's own pointers, for a game alone again */
+
+void net_names_restore(void) {
+    uint32_t t = M32(NAMES);
+    for (int p = 0; p < 4 && t; p++) if (name_was[p]) M32(t + 4u * (uint32_t)p) = name_was[p], name_was[p] = 0;
+}
+
+static void names_frame(void) {
+    static char sent[16];
+    static int every;
+    char mine[16], n[16];
+    for (int p = 0; p < net_n && M32(NAMES); p++) {   /* the game's own, also after a language change */
+        uint32_t cur = M32(M32(NAMES) + 4u * (uint32_t)p);
+        if (cur != NAME_BUF + 0x20u * (uint32_t)p && cur != PLAYER_REC + 0x6C2u * (uint32_t)p + 0x20) name_was[p] = cur;
+    }
+    memcpy(mine, dos32_mem(MY_NAME), 15); mine[15] = 0;
+    if (mine[0] && (strcmp(mine, sent) || ++every % 500 == 0)) {   /* again now and then: a rejoined player */
+        net_send_name(mine);
+        memcpy(sent, mine, 16);
+    }
+    uint32_t t = M32(NAMES);
+    for (int p = 0; p < net_n && t; p++) {
+        uint32_t buf = NAME_BUF + 0x20u * (uint32_t)p, park = PLAYER_REC + 0x6C2u * (uint32_t)p + 0x20;
+        if (p == net_me) memcpy(n, mine, 16); else net_name_of(p, n);
+        if (n[0]) { memcpy(dos32_mem(buf), n, 16); M32(t + 4u * (uint32_t)p) = buf; }
+        else if (M8(park)) M32(t + 4u * (uint32_t)p) = park;
     }
 }
 
@@ -117,6 +181,8 @@ void net_rules_frame(void) {
             seen[tb][i] = (uint8_t)now;
         }
     seen_ready = 1;
+    level_frame();
+    names_frame();
 }
 
 /* From the settings menu (the window's thread): queued for the game's. */
