@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `tools/psxmusic.py` (#12, #13): makes a music pack from your own
+  PlayStation disc (bin/cue): its 17 CD ride tunes and the heartbeat, named
+  from the disc's own track list.
+
 ## [0.6.0] - 2026-10-26
 
 First release without the alpha tag.
