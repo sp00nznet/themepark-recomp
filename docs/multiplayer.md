@@ -33,9 +33,17 @@ park. Everything else is the normal game, plus:
 - **The park never stops.** In one-player games the simulation pauses while a
   screen such as the bank or the charts is open, and the pause and the slow
   speeds work; in a network game time keeps going, and a speed change applies
-  to everyone.
+  to everyone. **Only the host sets the speed** and the game type (sandbox,
+  simulation, full); the others' choices go back to the host's.
 - **The year end waits for everyone**: nobody's new year starts until every
   player has reached it.
+- **Players are named**: the advisor and the charts call another player by the
+  name they typed at the start (the 1994 game said *HUMAN*).
+- **No cheat mode** in a network game.
+- **Going bust, or quitting**: that player is out, and the rest play on. A
+  player who goes bust sees the film and starts a new park on their own; the
+  last player left plays on alone, and is told so. (A crash is different: see
+  below.)
 
 All players move in step, so the game runs at the speed of the slowest
 machine. Loading a save state is switched off in a network game: it would put
@@ -226,6 +234,35 @@ on the title screen, which does not run the frame tick; the click on the
 title gets it to the name prompt, which does, at the same depth as the park,
 so the state loads there and the park comes back. Traffic from before the
 rollback carries the old epoch and is dropped.
+
+### Leaving for good
+
+In the 1994 game a player who went bust (`0x4629D8`, from the year end
+`0x46401C`) saw the film (`0x44C7D1`, argument 1) and got a new park
+(`0x409EEE`) on their own, while the others waited at the year-end barrier
+for them for ever: a black screen with the park's sound. Now that film, the
+game's quit (`0x439B20`) and closing the window send a goodbye (`LEFT`, the
+host passes it on). Each machine then takes that player out the way the game
+itself would skip a missing one: their slot byte (`0x4C7810`) goes to 0, so
+the exchange and the syncs pass them by, and the player count (`0x4C7792`),
+which the barrier counts to, goes down by one. At one player, it is a
+one-player game. If the host leaves, nobody can reach anyone, so every other
+player plays on alone.
+
+### Speed, game type, names, cheats
+
+- The speed is opcode `0x42` (`0x4C6634`), run on every machine: after the
+  exchange, any but the host's is dropped.
+- The game type is `0x4C66F1` (0 sandbox, 1 simulation, 2 full; a new game
+  sets 2 at `0x40A0C8`), each machine's own. The host sends its own; the
+  others are set to it, with the menu's ticks.
+- A park's owner is named from LANG group 1 (pointer table `[0x4C7B98]`) by
+  the park's `+1` byte, which is its number, so player 1 was *HUMAN* and
+  player 2 *BINGO HIGHWAY*. Each machine sends its player's name
+  (`0x4C66B0`), kept at the end of the fifth player record (`0x4C6586`,
+  unused with 4 players at most), and those entries point at it.
+- Cheat mode is word `0x4C6682` (set by the name, `0x41EABB`), cleared every
+  frame.
 
 ### House rules
 
