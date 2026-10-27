@@ -162,12 +162,17 @@ was hired in; give them patrols.
   is fiddly and the cursor keys can't scroll you any further. The cursor
   keys, though, scroll far off the right of the park and below the gate.
 - With someone standing on it, the bulldozer takes a path before the lamp on it.
+- Nothing can be built on the row just inside the front wall: making a park
+  locks the whole row, apart from the gate.
 
 **With the rule:** fences of every kind go under raised track, and where
 people stand (they step aside to the nearest grass or path); the camera
-scrolls 3 rows past the back wall, with grass drawn beyond it (the pointer
+scrolls 3 rows past the back wall (with the keys, the mouse, and the
+edge scroll while placing things), with grass drawn beyond it (the pointer
 there picks the wall's row, so nothing can be built off the map), and the
-cursor keys stop at the park's other edges where the mouse does; lamp posts go
+cursor keys stop at the park's other edges where the mouse does; the row
+inside the front wall is unlocked (and locked again when the rule is turned
+off, where it is still bare grass); lamp posts go
 on plain paths (not queues or bridges), guests walk past them, and the
 bulldozer takes the lamp before the path; fountains
 go on paths too, say in the middle of a square, with the paths round them
