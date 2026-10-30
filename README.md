@@ -291,6 +291,13 @@ systems, so either can build from the other's `src/recomp/gen/`. The lifted C
 is generated from your copy of the game on your machine and is never
 distributed.
 
+In a browser (experimental): with Docker,
+`docker run --rm -v "$PWD/..:/pc" -w /pc/themepark emscripten/emsdk sh -c 'emcmake cmake -B build-wasm -DPCRECOMP=/pc/tools && cmake --build build-wasm -j8'`
+(pcrecomp beside this folder), then `python3 tools/serve_wasm.py` and open
+http://localhost:8000/themepark.html in Chrome. Your `game/` is packed beside
+the page, so serve it only to yourself. Intro, menus and parks play; no music
+or network game yet. `tools/wasm_check.py` opens it in Chrome and screenshots it.
+
 - [docs/architecture.md](docs/architecture.md): how the pieces fit.
 - [docs/pacing.md](docs/pacing.md): why the game needs a frame limiter it never had.
 - [docs/testing.md](docs/testing.md): headless runs, scripted input, the conformance harness.

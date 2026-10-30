@@ -15,6 +15,9 @@
  * multiply overlay of scanlines and an aperture grille on that, the formulas
  * of present_d3d.c's shader.
  */
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <SDL.h>
 #include <math.h>
 #include <stdint.h>
@@ -575,6 +578,23 @@ static void event(const SDL_Event* e) {
     }
 }
 
+/* One frame: events, the pad, the game's picture to the window. */
+static void present_tick(void) {
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) event(&e);
+    if (SDL_GetWindowFlags(wnd) & SDL_WINDOW_MINIMIZED) { SDL_Delay(50); return; }
+    pad_poll(fw, fh, speed_step);
+    int w, h, ow, oh;
+    SDL_GetRendererOutputSize(ren, &ow, &oh);
+    int got = dos32_frame(frame, 1920, 1080, &w, &h);
+    if (got && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
+    if (got) lights_apply(frame, w, h);
+    if (ow != cw || oh != ch) { cw = ow; ch = oh; layout(); }
+    set_title();
+    draw(ren, g_present.scale, g_present.look);
+    SDL_RenderPresent(ren);
+}
+
 void present_run(void) {
     /* Relative motion from the pointer as the desktop moves it (its speed and
      * acceleration), warped back to the middle, as present.c does on Windows. */
@@ -599,23 +619,17 @@ void present_run(void) {
     if (fs) apply_fullscreen(1);
     SDL_ShowCursor(SDL_DISABLE);   /* the game draws its own */
     if ((muted = GetPrivateProfileIntA("sound", "mute", 0, ini_path))) sound_set_mute(1);
+#ifdef __EMSCRIPTEN__
+    /* The browser owns the loop: one frame per animation frame, and main()
+     * never returns (the game thread is a worker). */
+    emscripten_set_main_loop(present_tick, 0, 1);
+#else
     while (!closing) {
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) event(&e);
-        if (SDL_GetWindowFlags(wnd) & SDL_WINDOW_MINIMIZED) { SDL_Delay(50); continue; }
-        pad_poll(fw, fh, speed_step);
-        int w, h, ow, oh;
-        SDL_GetRendererOutputSize(ren, &ow, &oh);
-        int got = dos32_frame(frame, 1920, 1080, &w, &h);
-        if (got && (w != fw || h != fh)) { fw = w; fh = h; cw = 0; }
-        if (got) lights_apply(frame, w, h);
-        if (ow != cw || oh != ch) { cw = ow; ch = oh; layout(); }
-        set_title();
-        draw(ren, g_present.scale, g_present.look);
-        SDL_RenderPresent(ren);
+        present_tick();
         if (!g_present.vsync || g_present.gdi) SDL_Delay(g_present.gdi ? 16 : 1);
     }
     SDL_DestroyWindow(wnd);
+#endif
 }
 
 /* The game thread ended: stop the loop. */

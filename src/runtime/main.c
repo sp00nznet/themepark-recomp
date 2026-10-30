@@ -420,7 +420,12 @@ int main(int argc, char** argv) {
     dos32_on_retrace = on_retrace;
     if (seconds > 0 && !dos32_virtual_clock)   /* a hung program still stops */
         CloseHandle(CreateThread(NULL, 0, timeout_thread, NULL, 0, NULL));
+#ifdef __EMSCRIPTEN__
+    /* A worker's stack comes out of the wasm heap up front. */
+    HANDLE t = CreateThread(NULL, 32u << 20, game_thread, NULL, 0, NULL);
+#else
     HANDLE t = CreateThread(NULL, 256u << 20, game_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+#endif
     if (headless) {
         WaitForSingleObject(t, INFINITE);
         if (present_dir) return present_test(present_dir);   /* the run's last screen, every mode */
