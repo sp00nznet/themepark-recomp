@@ -14,6 +14,8 @@
 #include "compat.h"
 #ifdef _WIN32
 #include <mmsystem.h>
+#elif defined(__3DS__)
+#include <3ds.h>
 #else
 #include <SDL.h>
 #endif
@@ -125,6 +127,38 @@ int audio_init(int silent) {
     }
     CloseHandle(CreateThread(NULL, 0, feeder, NULL, 0, NULL));
     SetEvent(ev);
+    return live = 1;
+}
+#elif defined(__3DS__)
+/* The DSP plays NBLOCK buffers in turn; its callback refills the ones done. */
+static ndspWaveBuf wb[NBLOCK];
+static int16_t* abuf;
+
+static void refill(void* u) {
+    (void)u;
+    for (int b = 0; b < NBLOCK; b++) {
+        if (wb[b].status != NDSP_WBUF_DONE && wb[b].status != NDSP_WBUF_FREE) continue;
+        mix(wb[b].data_pcm16, BLOCK);
+        DSP_FlushDataCache(wb[b].data_pcm16, BLOCK * 4);
+        ndspChnWaveBufAdd(0, &wb[b]);
+    }
+}
+
+int audio_init(int silent) {
+    InitializeCriticalSection(&lock);
+    if (silent) return 0;
+    if (R_FAILED(ndspInit()) || !(abuf = linearAlloc(NBLOCK * BLOCK * 4))) {
+        fprintf(stderr, "[audio] no DSP (dspfirm.cdc dumped?): running silent\n");
+        return 0;
+    }
+    ndspSetOutputMode(NDSP_OUTPUT_STEREO);
+    ndspChnSetInterp(0, NDSP_INTERP_LINEAR);
+    ndspChnSetRate(0, RATE);
+    ndspChnSetFormat(0, NDSP_FORMAT_STEREO_PCM16);
+    memset(wb, 0, sizeof wb);
+    for (int b = 0; b < NBLOCK; b++) { wb[b].data_pcm16 = abuf + b * BLOCK * 2; wb[b].nsamples = BLOCK; }
+    ndspSetCallback(refill, NULL);
+    refill(NULL);
     return live = 1;
 }
 #else

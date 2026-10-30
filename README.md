@@ -298,6 +298,16 @@ http://localhost:8000/themepark.html in Chrome. Your `game/` is packed beside
 the page, so serve it only to yourself. Intro, menus and parks play; no music
 or network game yet. `tools/wasm_check.py` opens it in Chrome and screenshots it.
 
+On a Nintendo 3DS (experimental): with Docker,
+`docker run --rm -v "$PWD/..:/pc" -w /pc/themepark devkitpro/devkitarm sh -c 'cmake -B build-3ds -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/3DS.cmake -DPCRECOMP=/pc/tools && cmake --build build-3ds -j8'`.
+Put `build-3ds/themepark.3dsx` and your `game/` folder in `sdmc:/3ds/themepark/`
+and start it from the Homebrew Launcher. The bottom screen is the whole game,
+and the stylus is the mouse (hold L or R for the right button); the top screen
+is a 1:1 close-up of where you last touched. D-pad scrolls, A is Enter, B is
+Esc, X opens a keyboard for your name, SELECT+START quits. `args.txt` beside
+the .3dsx gives it a command line (scripted input, for tests). Checked in the
+Azahar emulator from the title into a park; not yet on hardware.
+
 - [docs/architecture.md](docs/architecture.md): how the pieces fit.
 - [docs/pacing.md](docs/pacing.md): why the game needs a frame limiter it never had.
 - [docs/testing.md](docs/testing.md): headless runs, scripted input, the conformance harness.
