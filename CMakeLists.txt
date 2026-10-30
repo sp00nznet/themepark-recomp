@@ -60,6 +60,18 @@ if(WIN32)
   # and wrap-around arithmetic, as the CPU does it.
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
   target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid ws2_32)
+elseif(NINTENDO_3DS)
+  # The 3DS (devkitARM's 3DS.cmake): libctru straight, no SDL (present_3ds.c,
+  # audio.c's ndsp). 24 MB of guest memory; the game folder is read from
+  # the SD card, beside the .3dsx (sdmc:/3ds/themepark/game).
+  list(REMOVE_ITEM HOST src/runtime/pad.c)
+  add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST}
+    src/runtime/present_3ds.c src/runtime/compat.c)
+  set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "-w;-fno-strict-aliasing;-fwrapv;-O1;-foptimize-sibling-calls")
+  target_compile_definitions(themepark PRIVATE DOS32_SMALL_HOST DOS32_MEM=0x01800000u)
+  target_link_libraries(themepark PRIVATE ctru m)
+  ctr_generate_smdh(themepark.smdh NAME "Theme Park" DESCRIPTION "Bullfrog, 1994; recompiled" AUTHOR "pcrecomp")
+  ctr_create_3dsx(themepark SMDH themepark.smdh)
 elseif(EMSCRIPTEN)
   # The browser (emcmake cmake): Emscripten's SDL2, the game thread a worker
   # (so the page must be served cross-origin isolated), guest memory in one
