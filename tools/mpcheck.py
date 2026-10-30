@@ -36,6 +36,8 @@ from conformance import SCRIPT                      # noqa: E402  into a park, b
 B = 0x400000                                        # --dump starts at the image base
 CTRL_T = ['--key', '60:1D', '--key', '60.05:14']
 LOOP_RIDE = 0x4BD765                                # the loop's "available" byte (ride table)
+CMD = 0x4C441F                                      # player 0's command opcode; +6 a player
+SPEED = 0x4C6634                                    # the game speed (opcode 0x42)
 
 
 def u32(d, a):
@@ -46,6 +48,12 @@ def region(d, name, n):
     at, size = {'seed': (0x4C3AF4, 4), 'tick': (0x4C3AFC, 4), 'players': (0x4C443C, n * 0x6C2),
                 'parks': (u32(d, 0x4C3B00), 25 * 0x222), 'stock': (0x4BF1E0, 25 * 0x250)}[name]
     return d[at - B:at - B + size]
+
+
+def name(d, p):
+    """Park p's owner's name: LANG group 1 (0x4C7B98) by the park's number."""
+    at = u32(d, u32(d, 0x4C7B98) + 4 * p)
+    return d[at - B:at - B + 16].split(b'\0')[0]
 
 
 def thugs(d):
@@ -81,6 +89,8 @@ def normal(a, tmp):
                      '--poke', '55:%X=3' % LOOP_RIDE]
         if k == n - 1:
             args += CTRL_T
+        if k == 1:                                   # a joiner's game speed command: only the host's counts
+            args += ['--poke', '50:%X=42' % (CMD + 6), '--poke', '50:%X=5' % (CMD + 7)]
         procs.append(start(a.exe, args))
     errs = [p.communicate(timeout=900)[1] for p in procs]
     ok = True
@@ -103,6 +113,8 @@ def normal(a, tmp):
     want = 30000 - (5000 * n if n == 2 else 0)
     ok &= check(cash(end[1]) - cash(end[0]) == want, 'gift and grant (player 2 %+d)' % (cash(end[1]) - cash(end[0])))
     ok &= check(end[1][LOOP_RIDE - B] & 1 == 1, 'shared research arrived')
+    ok &= check(all(struct.unpack_from('<H', d, SPEED - B)[0] == 0 for d in end), "a joiner can't change the speed")
+    ok &= check(name(end[0], 1) == b'TEST', 'player 2 by name (%r)' % name(end[0], 1))
     return ok
 
 

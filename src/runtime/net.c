@@ -34,7 +34,8 @@
  *   0x4390DF  receive             from that player
  *   0x41CCF8  the command dispatcher  who called it; checkpoints and rollbacks
  *   0x4399F2  the frame's exchange  house rules, the count of frames in step
- *   0x439B20  hang up             close
+ *   0x439B20  hang up             say goodbye: the others play on
+ *   0x44C7D1  the busted film     that player is out of the game
  */
 #ifdef _WIN32
 #include <winsock2.h>
@@ -93,7 +94,8 @@ static int checkpoint_every = 750;   /* frames: 30 s at 25 fps; TP_NET_CP */
 
 /* ---- the links -------------------------------------------------------------- */
 
-enum { DATA, SAVED, ROLLBACK, LIST, DOWN, UP, ACTION };
+enum { DATA, SAVED, ROLLBACK, LIST, DOWN, UP, ACTION, LEFT, NAME };
+static char names_[4][16];       /* each player's name, as typed at the start */
 typedef struct { uint8_t to, from, type, pad; uint32_t epoch, len; } hdr_t;
 typedef struct { uint32_t magic; uint8_t want, pad[3]; uint32_t game; } hello_t;      /* joiner -> host */
 typedef struct { uint8_t id, n, rejoin, pad; uint32_t game, epoch, rules; } welcome_t;   /* host -> joiner */
@@ -103,6 +105,11 @@ static CRITICAL_SECTION lk;      /* links, queues, the saved lists, the rollback
 static SOCKET link_[4];          /* host: to player i; others: link_[0], to the host */
 static int up[4];                /* host: player i is connected; others: up[0], the host */
 static int down_seen[4];         /* who the others are waiting for, for the title bar */
+/* Players who left for good (went bust, or quit): 1 heard of, 2 taken out of
+ * the game here. The game itself skips a player whose slot byte is not 1 in
+ * the exchange and the syncs, and its year-end barrier counts to PLAYERS. */
+static int left_[4], left_why[4];
+static int solo;                 /* everyone else has left: a one-player game now */
 
 /* What has come in from each player and not been read yet. */
 static struct { uint8_t* b; size_t r, w, cap; } in[4];
@@ -234,11 +241,12 @@ static int load_last(uint32_t* game, int* me, int* n) {
 
 /* The host, once everyone is back: the newest checkpoint all of them have. */
 static void maybe_rollback(void) {      /* lk held */
-    for (int i = 0; i < net_n; i++) if (!up[i] || !listed[i]) return;
+    for (int i = 0; i < net_n; i++) if (!left_[i] && (!up[i] || !listed[i])) return;
     uint32_t best = 0xFFFFFFFFu;
     for (int k = nsaved[0] - 1; k >= 0 && best == 0xFFFFFFFFu; k--) {
         int everyone = 1;
         for (int i = 1; i < net_n; i++) {
+            if (left_[i]) continue;
             int has = 0;
             for (int j = 0; j < nsaved[i]; j++) has |= saved[i][j] == saved[0][k];
             everyone &= has;
@@ -286,6 +294,7 @@ static DWORD WINAPI reader(LPVOID arg);
 
 static void link_down(int i) {          /* lk held */
     if (!up[i]) return;
+    if (left_[i]) { up[i] = 0; closesocket(link_[i]); return; }   /* it said goodbye: nobody waits */
     if (!net_wait_on_drop) die("a player has left the game");
     up[i] = 0;
     closesocket(link_[i]);
@@ -340,6 +349,18 @@ static DWORD WINAPI reader(LPVOID arg) {
             down_seen[buf[0]] = 1;
             break;
         case UP: down_seen[buf[0]] = 0; break;
+        case NAME:
+            if (net_me == 0 && h.to != 0) put(h.to, h.to, h.from, NAME, buf, h.len);
+            else if (h.len == 16) { memcpy(names_[h.from], buf, 15); names_[h.from][15] = 0; }
+            break;
+        case LEFT:                                             /* {who, why}: gone for good */
+            if (h.len != 2 || buf[0] >= net_n || buf[0] == net_me) break;
+            if (net_me == 0)                                   /* pass it on */
+                for (int k = 1; k < net_n; k++) if (k != buf[0]) put(k, k, 0, LEFT, buf, 2);
+            for (int k = 0; k < net_n; k++)                    /* without the host, no one can reach anyone */
+                if (k != net_me && (k == buf[0] || buf[0] == 0) && !left_[k]) left_[k] = 1, left_why[k] = buf[1];
+            down_seen[buf[0]] = 0;
+            break;
         }
         LeaveCriticalSection(&lk);
     }
@@ -356,8 +377,8 @@ static void admit(SOCKET s) {
     if (read_hello(s, &h)) { closesocket(s); return; }
     EnterCriticalSection(&lk);
     int id = -1;
-    if (h.want > 0 && h.want < net_n && !up[h.want] && (h.game == game_id || h.game == 0)) id = h.want;
-    for (int i = 1; i < net_n && id < 0; i++) if (!up[i]) id = i;
+    if (h.want > 0 && h.want < net_n && !up[h.want] && !left_[h.want] && (h.game == game_id || h.game == 0)) id = h.want;
+    for (int i = 1; i < net_n && id < 0; i++) if (!up[i] && !left_[i]) id = i;
     if (id < 0) { LeaveCriticalSection(&lk); closesocket(s); return; }   /* game full */
     welcome_t w = { (uint8_t)id, (uint8_t)net_n, 1, 0, game_id, epoch, tp_rules };
     if (all(s, &w, sizeof w, 0)) { LeaveCriticalSection(&lk); closesocket(s); return; }
@@ -556,13 +577,81 @@ static int player_of(uint32_t off, uint32_t sel) {
     return -1;
 }
 
+#define CMD     0x4C441F    /* byte: player i's command opcode, at +6 * i */
+#define CHEATS  0x4C6682    /* word: cheat mode (the name at 0x4C66B0, 0x41EABB) */
+
+/* Say goodbye for good (lk held): quitting, or this park went bust. */
+static void bye(int why) {
+    if (!net_n || solo) return;
+    uint8_t m[2] = { (uint8_t)net_me, (uint8_t)why };
+    if (net_me == 0) broadcast(LEFT, m, 2);
+    else put(0, 0, net_me, LEFT, m, 2);
+    for (int i = 0; i < net_n; i++)
+        if (i != net_me) {
+            if (!left_[i]) left_[i] = 3;
+            if (up[i]) shutdown(link_[i], 1);   /* not closesocket: that can drop the goodbye */
+        }
+    solo = 1;
+}
+
+void net_bye(void) {                    /* the window closed, or the game's own quit */
+    if (!net_n) return;
+    EnterCriticalSection(&lk);
+    bye(0);
+    LeaveCriticalSection(&lk);
+}
+
+/* On the game thread: take players who left out of the game. The game skips a
+ * player whose slot byte is not 1 in the exchange and the syncs, and its
+ * year-end barrier counts to PLAYERS, so the rest play on (#37). */
+static void take_out_left(void) {
+    char t[160] = "";
+    int last = 0;
+    EnterCriticalSection(&lk);
+    for (int i = 0; i < net_n; i++) {
+        if (left_[i] != 1) continue;
+        left_[i] = 2;
+        M8(SLOT + i) = 0;
+        M8(CMD + 6 * i) = 0;
+        if (M8(PLAYERS) > 1) M8(PLAYERS)--;
+        snprintf(t, sizeof t, left_why[i] ? "Player %d went bust and is out of the game" : "Player %d has left the game", i + 1);
+    }
+    if (t[0] && M8(PLAYERS) <= 1 && !solo) solo = last = 1;
+    LeaveCriticalSection(&lk);
+    if (!t[0]) return;
+    if (last) net_names_restore();
+    if (last) strncat(t, ": yours is the last park, and you play on alone", sizeof t - strlen(t) - 1);
+    snprintf(state_note, sizeof state_note, "%s", t);
+    state_note_until = GetTickCount() + 8000;
+    fprintf(stderr, "themepark: network: %s\n", t);
+#ifdef _WIN32
+    extern int sound_headless;
+    if (last && !sound_headless) MessageBoxA(NULL, t, "Theme Park - network game", MB_OK | MB_ICONINFORMATION);
+#endif
+}
+
+/* 0x44C7D1(film): 1 is going bust (0x462DC2), after which the game starts
+ * this player a new park. In a network game that player is out of it, alone. */
+void net_game_over(void (*lifted)(void)) {
+    if (net_n && !solo && M8(NET_DONE) && ARG(0) == 1) {
+        EnterCriticalSection(&lk);
+        bye(1);
+        LeaveCriticalSection(&lk);
+        for (int i = 0; i < net_n; i++) if (i != net_me) M8(SLOT + i) = 0;
+        M8(PLAYERS) = 1;
+        net_names_restore();
+        fprintf(stderr, "themepark: network: this park went bust: out of the network game\n");
+    }
+    lifted();
+}
+
 /* 0x438F65(ncb, buf, len): 0 when sent. */
 void net_send(void (*lifted)(void)) {
     (void)lifted;
     int to = player_of(ARG(0), ARG(1));
     uint32_t buf = ARG(2), len = ARG(3);
     EnterCriticalSection(&lk);
-    if (!resync) {
+    if (!resync && !solo && !left_[to]) {
         if (len > 6) logx("send to %d: %u bytes", to, len);
         to_player(to, DATA, dos32_mem(buf), len);
     }
@@ -583,9 +672,12 @@ void net_receive(void (*lifted)(void)) {
     int from = player_of(ARG(0), ARG(1));
     uint32_t buf = ARG(2), len = ARG(3);
     for (int spins = 0;; spins++) {
+        take_out_left();
         EnterCriticalSection(&lk);
-        int ok = resync || in[from].w - in[from].r >= len;
-        if (resync) memset(dos32_mem(buf), 0, len);           /* blank until the rollback's load */
+        int gone = solo || left_[from];                        /* left for good: nothing comes, nothing changes */
+        int ok = gone || resync || in[from].w - in[from].r >= len;
+        if (gone) ;
+        else if (resync) memset(dos32_mem(buf), 0, len);      /* blank until the rollback's load */
         else if (ok) { memcpy(dos32_mem(buf), in[from].b + in[from].r, len); in[from].r += len; }
         if (!ok && spins % 64 == 63) waiting_note();
         LeaveCriticalSection(&lk);
@@ -612,7 +704,7 @@ void net_receive(void (*lifted)(void)) {
 #define NOINLINE __attribute__((noinline))
 #endif
 static NOINLINE void checkpoint(int main_loop) {
-    if (!net_n) return;                /* a one-player game: the dispatcher runs every frame */
+    if (!net_n || solo) return;        /* a one-player game: the dispatcher runs every frame */
     int live = M8(NET_DONE) != 0;      /* in step with the others: the sessions are made */
     char p[MAX_PATH], tmp[MAX_PATH];
     EnterCriticalSection(&lk);
@@ -655,9 +747,18 @@ static NOINLINE void checkpoint(int main_loop) {
  * of the park, and the frames in step are counted. */
 void net_exchange(void (*lifted)(void)) {
     int live = M8(NET_DONE) != 0;
+    take_out_left();
     net_actions_apply(live && from_frame_tick && !resync);
     lifted();
     if (!resync && live) frame++;
+    /* Every player's command has arrived. The game speed (opcode 0x42) is
+     * everyone's, so only the host's counts; and no cheat mode (#37). */
+    for (int i = 1; i < net_n; i++)
+        if (M8(CMD + 6 * i) == 0x42) {
+            if (i == net_me) note("Only the host changes the game speed", 0);
+            M8(CMD + 6 * i) = 0;
+        }
+    M16(CHEATS) = 0;
 }
 
 /* 0x41CCF8, the command dispatcher (it calls the exchange first): who called
@@ -673,7 +774,7 @@ void net_dispatch(void (*lifted)(void)) {
 /* 0x439B20: at exit. */
 void net_hangup(void (*lifted)(void)) {
     (void)lifted;
-    for (int i = 0; i < 4; i++) if (up[i]) closesocket(link_[i]);
+    net_bye();
     ret(0);
 }
 
@@ -707,6 +808,18 @@ void net_send_action(int to, const net_action_t* a) {
     EnterCriticalSection(&lk);
     if (to == net_me) net_action_received(net_me, a, sizeof *a);
     else to_player(to, ACTION, a, sizeof *a);
+    LeaveCriticalSection(&lk);
+}
+
+void net_send_name(const char name[16]) {
+    EnterCriticalSection(&lk);
+    for (int p = 0; p < net_n; p++) if (p != net_me) to_player(p, NAME, name, 16);
+    LeaveCriticalSection(&lk);
+}
+
+void net_name_of(int p, char out[16]) {
+    EnterCriticalSection(&lk);
+    memcpy(out, names_[p & 3], 16);
     LeaveCriticalSection(&lk);
 }
 

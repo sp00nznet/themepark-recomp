@@ -22,6 +22,20 @@ game's next one comes from the new pack.
 Any song the pack has no file for plays as the game's own MIDI, so a pack can
 replace one song or all of them.
 
+## The PlayStation disc
+
+The PlayStation version's CD music is the 17 ride tunes, recorded from the
+same compositions as the MIDI, plus the negotiation heartbeat. From a bin/cue
+rip of your own disc (any pressing):
+
+```
+py -3 tools\psxmusic.py "Theme Park.cue"
+```
+
+makes `music\psx\` (Ogg if ffmpeg is installed, otherwise WAV); pick *psx* in
+F10, *Music*. Its other three tracks (CHEMIST, SHARES, EMPTY) have no song in
+the PC game and are skipped.
+
 ## The songs
 
 The game plays a short tune while a ride or shop is shown, and others at

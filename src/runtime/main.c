@@ -45,7 +45,7 @@ extern uint32_t sound_variant_va, sound_noop_fn;
 extern int net_host_players, net_port, net_resume;   /* net.c: multiplayer */
 extern char net_join[256];
 extern int net_wait_on_drop;
-void net_rules_give(int to, int amount), net_rules_grant(int to, int amount), net_rules_share(int to, int on);
+void net_rules_give(int to, int amount), net_rules_grant(int to, int amount), net_rules_share(int to, int on), net_bye(void);
 void sound_tick(double dt);
 void sound_reset(void);
 
@@ -420,13 +420,19 @@ int main(int argc, char** argv) {
     dos32_on_retrace = on_retrace;
     if (seconds > 0 && !dos32_virtual_clock)   /* a hung program still stops */
         CloseHandle(CreateThread(NULL, 0, timeout_thread, NULL, 0, NULL));
+#ifdef __EMSCRIPTEN__
+    /* A worker's stack comes out of the wasm heap up front. */
+    HANDLE t = CreateThread(NULL, 32u << 20, game_thread, NULL, 0, NULL);
+#else
     HANDLE t = CreateThread(NULL, 256u << 20, game_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+#endif
     if (headless) {
         WaitForSingleObject(t, INFINITE);
         if (present_dir) return present_test(present_dir);   /* the run's last screen, every mode */
     }
     else {
         present_run();          /* returns when the window closes */
+        net_bye();              /* a network game: the others play on without this player */
         dos32_quit = 1;
         WaitForSingleObject(t, 5000);
     }

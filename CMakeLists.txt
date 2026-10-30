@@ -60,6 +60,26 @@ if(WIN32)
   # and wrap-around arithmetic, as the CPU does it.
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
   target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid ws2_32)
+elseif(EMSCRIPTEN)
+  # The browser (emcmake cmake): Emscripten's SDL2, the game thread a worker
+  # (so the page must be served cross-origin isolated), guest memory in one
+  # block (DOS32_SMALL_HOST), and the game folder packed beside the wasm:
+  # -DTP_GAME_DIR=game (its GAME and THEME.CD). No music (it needs a MIDI synth) and no network.
+  file(STRINGS ${PCRECOMP}/runtime/recomp32/recomp_types.h HAS_TAIL REGEX "RECOMP_TAIL_CALL")
+  file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.c HAS_SMALL REGEX "DOS32_SMALL_HOST")
+  if(NOT HAS_TAIL OR NOT HAS_SMALL)
+    message(FATAL_ERROR "pcrecomp at ${PCRECOMP} cannot build for the browser (pcrecomp#157): git -C ${PCRECOMP} pull")
+  endif()
+  set(TP_GAME_DIR ${CMAKE_SOURCE_DIR}/game CACHE PATH "the game folder (GAME and THEME.CD) to pack")
+  set(CMAKE_EXECUTABLE_SUFFIX .html)
+  add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST}
+    src/runtime/present_sdl.c src/runtime/compat.c)
+  set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "-w;-fno-strict-aliasing;-fwrapv;-O1")
+  target_compile_options(themepark PRIVATE -sUSE_SDL=2 -pthread -mtail-call)
+  target_compile_definitions(themepark PRIVATE DOS32_SMALL_HOST)
+  target_link_options(themepark PRIVATE -sUSE_SDL=2 -pthread -mtail-call -sPTHREAD_POOL_SIZE=4
+    -sINITIAL_MEMORY=512MB -sSTACK_SIZE=4MB -sEXIT_RUNTIME=0
+    "SHELL:--preload-file ${TP_GAME_DIR}/GAME@/game/GAME" "SHELL:--preload-file ${TP_GAME_DIR}/THEME.CD@/game/THEME.CD")
 else()
   # Linux: gcc (or clang) and SDL2 for the window, sound and pad; ALSA's
   # sequencer, if its headers are there, for the music (sound.c).

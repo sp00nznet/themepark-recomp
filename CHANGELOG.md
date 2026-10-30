@@ -3,6 +3,26 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `tools/psxmusic.py` (#12, #13): makes a music pack from your own
+  PlayStation disc (bin/cue): its 17 CD ride tunes and the heartbeat, named
+  from the disc's own track list.
+
+### Changed
+- Network game (#37): only the host sets the game speed and the game type;
+  the advisor and charts call other players by the names they typed, not
+  "HUMAN"; cheat mode is off.
+- **More room to build** (#15): the row just inside the front wall, which
+  the 1994 game locks when it makes a park, can be built on; the edge scroll
+  while placing things reaches the 3 extra rows at the back too.
+
+### Fixed
+- Network game (#37): a player who goes bust or quits leaves the game, and
+  the rest play on; before, the others waited at the year end for ever on a
+  black screen.
+
 ## [0.6.0] - 2026-10-26
 
 First release without the alpha tag.
