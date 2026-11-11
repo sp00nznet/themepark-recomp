@@ -47,6 +47,7 @@
 #include "compat.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <unistd.h>

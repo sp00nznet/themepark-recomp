@@ -134,7 +134,12 @@ static void run_events(void) {
 static FILE* rec;
 static FILE* wav;                /* --wav, or the sound of --record before it is muxed */
 static char rec_video[MAX_PATH], wav_path[MAX_PATH];
-static uint32_t rec_buf[1920 * 1080];
+#ifdef __3DS__
+#define REC_PX 1   /* no --record there (no ffmpeg to pipe to): 16 MB back */
+#else
+#define REC_PX (1920 * 1080)
+#endif
+static uint32_t rec_buf[REC_PX];
 static int rec_w, rec_h;
 static uint32_t watch[8];
 static uint16_t watch_v[8];
@@ -177,7 +182,7 @@ static void on_retrace(void) {
     else lights_apply(rec_buf, w, h);
     if (!rec_w) { rec_w = w; rec_h = h; }
     if (w != rec_w || h != rec_h) {   /* one size per file: scale nearest into the first */
-        static uint32_t tmp[1920 * 1080];
+        static uint32_t tmp[REC_PX];
         for (int y = 0; y < rec_h; y++)
             for (int x = 0; x < rec_w; x++) tmp[y * rec_w + x] = rec_buf[(y * h / rec_h) * w + x * w / rec_w];
         memcpy(rec_buf, tmp, (size_t)rec_w * rec_h * 4);
@@ -264,6 +269,22 @@ static DWORD WINAPI timeout_thread(LPVOID p) {
 }
 
 int main(int argc, char** argv) {
+#ifdef __3DS__
+    chdir("sdmc:/3ds/themepark/");   /* the game folder and themepark.ini live here */
+    /* No command line on a 3DS: args.txt beside the .3dsx gives one (tests). */
+    static char argbuf[4096];
+    static char* av[128];
+    FILE* af = argc <= 1 ? fopen("args.txt", "r") : NULL;
+    if (af) {
+        size_t n = fread(argbuf, 1, sizeof argbuf - 1, af);
+        fclose(af);
+        argbuf[n] = 0;
+        av[0] = argc ? argv[0] : "themepark";
+        argc = 1;
+        for (char* t = strtok(argbuf, " \t\r\n"); t && argc < 127; t = strtok(NULL, " \t\r\n")) av[argc++] = t;
+        argv = av;
+    }
+#endif
     /* GOG's THEME.BAT passes -l3; the language number picks LANGn-0.DAT, and
      * 0 is English. --lang N picks another. */
     char args[256] = "-cC:/game/ -dC:/THEME.CD/ -l0";
@@ -423,6 +444,9 @@ int main(int argc, char** argv) {
 #ifdef __EMSCRIPTEN__
     /* A worker's stack comes out of the wasm heap up front. */
     HANDLE t = CreateThread(NULL, 32u << 20, game_thread, NULL, 0, NULL);
+#elif defined(__3DS__)
+    /* Committed up front, from 64 MB in all; the game runs in under 1 MB. */
+    HANDLE t = CreateThread(NULL, 4u << 20, game_thread, NULL, 0, NULL);
 #else
     HANDLE t = CreateThread(NULL, 256u << 20, game_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 #endif
