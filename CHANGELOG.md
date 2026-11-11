@@ -6,6 +6,12 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **macOS** (#55): the same native build as Linux, with `./setup.sh`; music
+  on Apple's built-in synth. Checked headless on macOS 15 (Intel); not yet
+  played by hand or tried on Apple Silicon. Needs pcrecomp#188.
+- In a browser (experimental): an Emscripten build of your own copy (#53).
+- On a Nintendo 3DS (experimental): a homebrew build, checked in an
+  emulator (#54).
 - `tools/psxmusic.py` (#12, #13): makes a music pack from your own
   PlayStation disc (bin/cue): its 17 CD ride tunes and the heartbeat, named
   from the disc's own track list.
@@ -19,6 +25,11 @@ versions follow [SemVer](https://semver.org/).
   while placing things reaches the 3 extra rows at the back too.
 
 ### Fixed
+- The takeover and going-bust films (#10) went by in an instant and then
+  sat on their last frame through the music; they play at 17.5 frames a
+  second again.
+- Network game (#57): messages with a bad player number or too short a
+  length are dropped (a peer could write past an array).
 - Network game (#37): a player who goes bust or quits leaves the game, and
   the rest play on; before, the others waited at the year end for ever on a
   black screen.
