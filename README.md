@@ -84,6 +84,7 @@ world map into a running park, and a tester has been playing it since 0.2
 | The game's own saves | untested |
 | Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
 | Linux | native (gcc, SDL2): conformance 6/6 and save states checked headless; the window, mouse and pad not yet played by hand; music needs a GM synth on ALSA (FluidSynth, TiMidity++) |
+| macOS | native (clang, SDL2), Intel: conformance 6/6, rulescheck and mpcheck pass headless; not played by hand; Apple Silicon untried; music on Apple's DLS synth |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
 main menu, park calendar running, no faults, no unresolved dispatches.
@@ -230,6 +231,17 @@ picks a port by its ALSA address. Without one the game plays its effects and
 no music.
 
 `./build-linux.sh` rebuilds after a change.
+
+### macOS
+
+The same native program as on Linux, built with Apple's clang and SDL2.
+Checked headless on macOS 15 (Intel): conformance 6/6, modern rules and a
+network game. Not yet played by hand, nor tried on Apple Silicon.
+
+1. `xcode-select --install`, then `brew install cmake pkg-config sdl2 innoextract`
+2. `./setup.sh` (as on Linux), then `./themepark.sh`
+
+Music plays on Apple's built-in General MIDI synth; nothing to set up.
 
 ## Usage
 

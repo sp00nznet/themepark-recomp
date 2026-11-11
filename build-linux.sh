@@ -10,4 +10,4 @@
 set -e
 cd "$(dirname "$0")"
 cmake -B build-linux -DCMAKE_BUILD_TYPE=Release ${PCRECOMP:+"-DPCRECOMP=$PCRECOMP"}
-cmake --build build-linux -j "$(nproc)"
+cmake --build build-linux -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)"

@@ -61,8 +61,9 @@ if(WIN32)
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
   target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid ws2_32)
 else()
-  # Linux: gcc (or clang) and SDL2 for the window, sound and pad; ALSA's
-  # sequencer, if its headers are there, for the music (sound.c).
+  # Linux and macOS: gcc (or clang) and SDL2 for the window, sound and pad;
+  # for the music (sound.c), ALSA's sequencer if its headers are there, or
+  # on macOS Apple's DLS synth.
   if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
   endif()
@@ -73,7 +74,9 @@ else()
     src/runtime/present_sdl.c src/runtime/compat.c)
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "-w;-fno-strict-aliasing;-fwrapv;-O1;-foptimize-sibling-calls")
   target_link_libraries(themepark PRIVATE PkgConfig::SDL2 m pthread)
-  if(ALSA_FOUND)
+  if(APPLE)
+    target_link_libraries(themepark PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+  elseif(ALSA_FOUND)
     target_compile_definitions(themepark PRIVATE HAVE_ALSA)
     target_link_libraries(themepark PRIVATE PkgConfig::ALSA)
   else()
