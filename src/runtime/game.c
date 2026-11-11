@@ -94,15 +94,15 @@ void pace_frame(void (*lifted)(void)) {
  * frame. A frame that did not go through the poll is paced here instead, so
  * every loop runs at the frame rate and none is paced twice.
  *
- * Except the takeover and game-over films (0x44C7D1, issue #10): their loop
- * has a pace of its own, one retrace (70 Hz) a pass and in 320x200 a new
- * frame every 4th pass, 17.5 frames a second. In 640x480 it shows a new frame
- * every pass, which a 486 could only manage every few retraces; hold those to
- * the same 17.5. Paced at the game's frame rate instead, 320x200 played at
- * 6 frames a second. */
+ * Except the takeover and game-over films (0x44C7D1, issue #10): on DOS their
+ * loop waited one retrace (70 Hz) a pass, and in 320x200 shows a new frame
+ * every 4th pass, 17.5 frames a second. In 640x480 it shows a new frame every
+ * pass, which a 486 could only manage every few retraces; hold those to the
+ * same 17.5. Here the retrace wait does not wait, so both are held: unpaced,
+ * all 73 frames went by at once and the last one sat out the film's music. */
 void pace_present(void (*lifted)(void)) {
     if (g_cur_func >= 0x0044C7D1u && g_cur_func < 0x0044CA6Bu) {
-        if (!(*dos32_mem(0x4CE5F6) & 1)) pace_hold(4.0 / 70);   /* bit 0: 320x200 */
+        pace_hold((*dos32_mem(0x4CE5F6) & 1) ? 1.0 / 70 : 4.0 / 70);   /* bit 0: 320x200 */
     }
     else if (!polled) pace_wait();
     polled = 0;
