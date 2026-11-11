@@ -336,19 +336,20 @@ static DWORD WINAPI reader(LPVOID arg) {
             if (net_me == 0 && h.to != 0) put(h.to, h.to, h.from, ACTION, buf, h.len);
             else net_action_received(h.from, buf, h.len);
             break;
-        case SAVED: remember(h.from, *(uint32_t*)buf); break;  /* host */
+        case SAVED: if (h.len < 4) break; remember(h.from, *(uint32_t*)buf); break;  /* host */
         case LIST:                                             /* host: a player is back */
             nsaved[h.from] = 0;
             for (uint32_t k = 0; k + 4 <= h.len; k += 4) remember(h.from, *(uint32_t*)(buf + k));
             listed[h.from] = 1;
             maybe_rollback();
             break;
-        case ROLLBACK: epoch = h.epoch; rollback_local(*(uint32_t*)buf); break;
-        case DOWN:
+        case ROLLBACK: if (h.len < 4) break; epoch = h.epoch; rollback_local(*(uint32_t*)buf); break;
+        case DOWN:                                             /* {who}, or 0xFF: no common checkpoint */
+            if (h.len < 1 || (buf[0] >= 4 && buf[0] != 0xFF)) break;
             if (buf[0] == 0xFF) { LeaveCriticalSection(&lk); die("the host could not find a checkpoint every player has"); }
             down_seen[buf[0]] = 1;
             break;
-        case UP: down_seen[buf[0]] = 0; break;
+        case UP: if (h.len < 1 || buf[0] >= 4) break; down_seen[buf[0]] = 0; break;
         case NAME:
             if (net_me == 0 && h.to != 0) put(h.to, h.to, h.from, NAME, buf, h.len);
             else if (h.len == 16) { memcpy(names_[h.from], buf, 15); names_[h.from][15] = 0; }
