@@ -608,6 +608,26 @@ int32_t tp_cam_limit(int edge) {
     if (edge == 'r') return 64 - tp_w / w;
     return 64 - (h + ((M8(0x4CE5F6) & 1) ? 400 : tp_h) - 1) / h;
 }
+/* The row inside the front wall (row 55, the wall is 56). Making a park
+ * (0x409077) locks it, all but the gate's columns 31-33, so nothing can be
+ * built along the front (#15). With the rule it is unlocked; a save keeps the
+ * lock, so this runs every frame, and the rule turned off locks the bare grass
+ * again. Checked by the wall (type 0xCB) being where it should be. */
+#define FRONT_ROW 55
+static void front_row(void) {
+    static int open;
+    uint32_t t = M32(TILES);
+    if (!t || M8(t + 4u * (FRONT_ROW + 1) * 64 + 4 * 10 + 2) != 0xCB) return;   /* not in a park */
+    int want = !!(tp_rules & RULE_BUILD);
+    if (!want && !open) return;
+    for (int x = 1; x < 63; x++) {
+        if (x >= 31 && x <= 33) continue;
+        uint32_t a = t + 4u * (FRONT_ROW * 64 + x);
+        if (want) M8(a + 3) &= (uint8_t)~8;
+        else if (M8(a + 2) == 0 && M16(a) == 0) M8(a + 3) |= 8;
+    }
+    open = want;
+}
 #define ABOVE_ROWS 4         /* the 3 rows, and one for anything tall */
 static void view_above(void (*lifted)(void)) {
     if ((int16_t)M16(CAM_ROW) >= 0) { lifted(); return; }
@@ -1058,6 +1078,7 @@ void key_read(void (*lifted)(void)) {          /* 0x46E888(): the poll reads a k
 void rules_frame(void) {   /* game.c, between frames on the game thread */
     lights_frame();
     esc_keys();
+    front_row();
     for (int i = 0; i < ncalls; i++) {
         uint32_t r = guest_call(calls[i].addr, (int)calls[i].n, calls[i].a);
         fprintf(stderr, "[rules] call %08x -> %08x\n", calls[i].addr, r);

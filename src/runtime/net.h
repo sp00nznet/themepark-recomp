@@ -12,7 +12,12 @@ enum {
     ACT_GIFT,         /* `amount` from the sender, who has paid */
     ACT_GRANT,        /* the host's: `amount` from nowhere (a fine if negative) */
     ACT_RESEARCH,     /* item `arg` (table << 8 | index) is now available */
+    ACT_LEVEL,        /* the host's: the game type is `arg` */
 };
+void net_bye(void);              /* leaving for good: the others play on */
+void net_send_name(const char name[16]);   /* this player's name, to the others */
+void net_name_of(int p, char out[16]);     /* player p's, or "" */
+void net_names_restore(void);              /* alone again: the game's own names */
 
 void net_send_action(int to, const net_action_t* a);
 void net_action_received(int from, const void* p, uint32_t len);

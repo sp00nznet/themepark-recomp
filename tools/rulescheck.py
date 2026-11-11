@@ -129,10 +129,12 @@ def building(exe):
     fences = sum((['--call', '55.%d:4187d8:45:%x:1' % (k + 1, 0xA20 + k)] for k in range(5)), [])
     lamps = ['--poke', '55:4c6646=02', '--poke', '55:4c6647=00']   # the lamp is the feature picked
     lamps += sum((['--call', '55.%d:430da6:%x' % (6 + k, 0xB9F + 2 * k)] for k in range(3)), [])
-    off = run(exe, 'none', 57, fences + lamps)
-    on = run(exe, 'building', 57, fences + lamps)
-    ok = check(off.count('call 004187d8 -> 00000000') == 5 and on.count('fence under the track') == 5,
+    front = ['--call', '56.1:4187d8:45:dca:1', '--call', '56.2:4187d8:45:dcb:1']   # row 55, inside the front wall
+    off = run(exe, 'none', 57, fences + lamps + front)
+    on = run(exe, 'building', 57, fences + lamps + front)
+    ok = check(off.count('call 004187d8 -> 00000000') == 7 and on.count('fence under the track') == 5,
                'building: fences go under the coaster')
+    ok &= check(on.count('call 004187d8 -> 00000001') == 7, 'building: fences along the front wall')
     ok &= check(off.count('call 00430da6 -> 00000000') == 3 and on.count('lamp on the path') == 3,
                 'building: lamps go on a path')
     # A fountain in the plaza by the gate (33,52), then bulldozed: the plaza comes back.

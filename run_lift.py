@@ -92,7 +92,7 @@ OVERRIDES = {
     # The NetBIOS multiplayer, carried over TCP (net.c, docs/multiplayer.md).
     0x004393BE: 'net_start', 0x00438A01: 'net_present', 0x00439414: 'net_connect',
     0x00438F65: 'net_send', 0x004390DF: 'net_receive', 0x00439B20: 'net_hangup',
-    0x004399F2: 'net_exchange', 0x0041CCF8: 'net_dispatch',
+    0x004399F2: 'net_exchange', 0x0041CCF8: 'net_dispatch', 0x0044C7D1: 'net_game_over',
     # Modern rules, each off unless turned on (src/runtime/rules.c, docs/rules.md).
     0x00424149: 'guard_patrol', 0x0043D88D: 'thug_caught', 0x0041276C: 'guest_stuck', 0x0044CBDB: 'advisor',
     0x00422BCF: 'ent_perform', 0x00422A06: 'ent_walk', 0x004248ED: 'staff_drop',
@@ -274,6 +274,7 @@ SCREEN_SITES.update({
     0x004043EE: ('(uint32_t)(0)', CAM_TOP),
     0x00408583: ('(uint32_t)(0)', CAM_TOP),
     0x0040858D: ('(uint16_t)(0)', CAM_TOP),
+    0x0043751C: ('(uint32_t)(0)', CAM_TOP),   # the edge scroll while laying track (0x437268)
     0x00404B90: ('(uint16_t)(0)', '((int16_t)MEM16(0x4C6666) < 0 ? -(int16_t)MEM16(0x4C6666) : 0)'),
     # The cursor keys' clamp stops where the edge scroll does (rules.c tp_cam_limit).
     0x0040855B: ('(uint32_t)(0)', "tp_cam_limit('l')"),

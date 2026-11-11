@@ -45,7 +45,7 @@ extern uint32_t sound_variant_va, sound_noop_fn;
 extern int net_host_players, net_port, net_resume;   /* net.c: multiplayer */
 extern char net_join[256];
 extern int net_wait_on_drop;
-void net_rules_give(int to, int amount), net_rules_grant(int to, int amount), net_rules_share(int to, int on);
+void net_rules_give(int to, int amount), net_rules_grant(int to, int amount), net_rules_share(int to, int on), net_bye(void);
 void sound_tick(double dt);
 void sound_reset(void);
 
@@ -427,6 +427,7 @@ int main(int argc, char** argv) {
     }
     else {
         present_run();          /* returns when the window closes */
+        net_bye();              /* a network game: the others play on without this player */
         dos32_quit = 1;
         WaitForSingleObject(t, 5000);
     }
