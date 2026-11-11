@@ -1,6 +1,6 @@
 #!/bin/bash
-# Linux setup: the same steps as Setup.cmd (tools/setup.ps1), for a native
-# Linux program -- no Wine, no DOSBox.
+# Linux and macOS setup: the same steps as Setup.cmd (tools/setup.ps1), for a
+# native program -- no Wine, no DOSBox.
 #
 #   1. check the tools (gcc, CMake, Python 3 with capstone and pefile, git,
 #      SDL2), and say which packages to install when one is missing
@@ -52,10 +52,11 @@ if [ ${#need[@]} -gt 0 ]; then
   say "    Debian, Ubuntu: sudo apt install gcc cmake python3 python3-pip git pkg-config libsdl2-dev libasound2-dev innoextract"
   say "    Fedora:         sudo dnf install gcc cmake python3 python3-pip git pkgconf sdl2-compat-devel alsa-lib-devel innoextract"
   say "    Arch:           sudo pacman -S gcc cmake python python-pip git pkgconf sdl2 alsa-lib innoextract"
+  say "    macOS:          xcode-select --install; brew install cmake pkg-config sdl2 innoextract"
   say "  (innoextract only to unpack GOG's installer; ffmpeg only for --record.)"
   fail "install them, then run ./setup.sh again."
 fi
-pkg-config --exists alsa || say "  No ALSA headers (libasound2-dev / alsa-lib-devel): it will build, with no music."
+[ "$(uname)" = Darwin ] || pkg-config --exists alsa || say "  No ALSA headers (libasound2-dev / alsa-lib-devel): it will build, with no music."
 if ! python3 -c 'import capstone, pefile' 2>/dev/null; then
   say "  The Python packages capstone and pefile are missing; installing them for your user (pip)."
   python3 -m pip install --user --quiet capstone pefile 2>/dev/null ||
@@ -162,7 +163,7 @@ python3 run_lift.py --exe "$main_exe" || fail "the lift failed."
 intro_exe=$(find "$(dirname "$main_exe")" -maxdepth 1 -iname intro.exe | head -n 1)   # the opening film
 [ -n "$intro_exe" ] && { python3 run_lift.py --intro --exe "$intro_exe" || fail "the intro's lift failed."; }
 cmake -B build-linux -DCMAKE_BUILD_TYPE=Release "-DPCRECOMP=$TOOLKIT" >/dev/null || fail "CMake could not configure the build."
-cmake --build build-linux -j "$(nproc)" || fail "the build failed."
+cmake --build build-linux -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" || fail "the build failed."
 [ -x build-linux/themepark ] || fail "the build finished but build-linux/themepark is missing."
 
 # ---- 5. launcher ----------------------------------------------------------------
@@ -170,4 +171,4 @@ printf '#!/bin/sh\ncd "$(dirname "$0")" && exec build-linux/themepark "$@"\n' > 
 chmod +x themepark.sh
 step "[5/5] Ready: ./themepark.sh"
 say "Click in the picture to play; F10 for the settings menu (save states, window size, scaling...)."
-say "Music needs a General MIDI synth on ALSA's sequencer: FluidSynth or TiMidity++ running as a server."
+[ "$(uname)" = Darwin ] || say "Music needs a General MIDI synth on ALSA's sequencer: FluidSynth or TiMidity++ running as a server."

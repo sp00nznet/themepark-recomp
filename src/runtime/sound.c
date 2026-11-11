@@ -20,6 +20,8 @@
 #include "compat.h"
 #ifdef _WIN32
 #include <mmsystem.h>
+#elif defined(__APPLE__)
+#include <AudioToolbox/AudioToolbox.h>
 #elif defined(HAVE_ALSA)
 #include <alsa/asoundlib.h>
 #endif
@@ -202,11 +204,30 @@ typedef struct {
 
 /* The synth. Windows: its General MIDI synth (the MIDI mapper). Linux: the
  * first ALSA sequencer port that is a synth (FluidSynth or TiMidity++ running
- * as a server, or a hardware one), or the one TP_MIDI names ("128:0"). */
+ * as a server, or a hardware one), or the one TP_MIDI names ("128:0").
+ * macOS: Apple's DLS synth. */
 #ifdef _WIN32
 static HMIDIOUT midi_dev;
 static int midi_open(void) { return midiOutOpen(&midi_dev, MIDI_MAPPER, 0, 0, CALLBACK_NULL) == MMSYSERR_NOERROR; }
 static void midi_out(uint32_t msg) { midiOutShortMsg(midi_dev, msg); }
+#elif defined(__APPLE__)
+/* macOS: its own General MIDI synth (Apple's DLS synth), into the default output. */
+static AUGraph graph;
+static AudioUnit synth;
+static int midi_open(void) {
+    AudioComponentDescription sd = {kAudioUnitType_MusicDevice, kAudioUnitSubType_DLSSynth, kAudioUnitManufacturer_Apple, 0, 0};
+    AudioComponentDescription od = {kAudioUnitType_Output, kAudioUnitSubType_DefaultOutput, kAudioUnitManufacturer_Apple, 0, 0};
+    AUNode sn, on;
+    if (NewAUGraph(&graph) || AUGraphAddNode(graph, &sd, &sn) || AUGraphAddNode(graph, &od, &on) ||
+        AUGraphConnectNodeInput(graph, sn, 0, on, 0) || AUGraphOpen(graph) || AUGraphNodeInfo(graph, sn, NULL, &synth) ||
+        AUGraphInitialize(graph) || AUGraphStart(graph)) {
+        if (graph) DisposeAUGraph(graph);
+        return 0;
+    }
+    fprintf(stderr, "[sound] music on Apple's DLS synth\n");
+    return 1;
+}
+static void midi_out(uint32_t msg) { MusicDeviceMIDIEvent(synth, msg & 0xFF, (msg >> 8) & 0x7F, (msg >> 16) & 0x7F, 0); }
 #elif defined(HAVE_ALSA)
 static snd_seq_t* seq;
 static int seq_port;
