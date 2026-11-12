@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-11
+
 ### Added
 - **macOS** (#55): the same native build as Linux, with `./setup.sh`; music
   on Apple's built-in synth. Checked headless on macOS 15 (Intel); not yet
@@ -15,7 +17,6 @@ versions follow [SemVer](https://semver.org/).
 - `tools/psxmusic.py` (#12, #13): makes a music pack from your own
   PlayStation disc (bin/cue): its 17 CD ride tunes and the heartbeat, named
   from the disc's own track list.
-
 - Modern rule **Right-drag removes paths** (`erase`, #45): with the path
   tool, hold the right button and sweep to take up a whole stretch of path
   or queue, not one tile per click.
