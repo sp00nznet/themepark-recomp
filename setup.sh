@@ -14,6 +14,7 @@
 #   ./setup.sh                      # look for the game
 #   ./setup.sh ~/GOG\ Games/Theme\ Park   # the folder, or GOG's setup_theme_park_*.exe
 #   ./setup.sh --yes --game-dir DIR  # as the recomp launcher runs it (it asks nothing either way)
+#   ./setup.sh --targets web,3ds     # also the browser and 3DS builds, in Docker (builds/web, builds/3ds)
 #
 # Every step is skipped when its result is already there, so running it
 # again carries on from where it stopped.
@@ -21,10 +22,12 @@ set -e
 cd "$(dirname "$0")"
 ROOT=$PWD
 GAME_ARG=
+TARGETS=
 while [ $# -gt 0 ]; do
   case $1 in
     --yes) ;;                                  # nothing here asks
     --game-dir) GAME_ARG=$2; shift ;;
+    --targets) TARGETS=$(printf '%s' "$2" | tr ',' ' '); shift ;;
     *) GAME_ARG=$1 ;;
   esac
   shift
@@ -38,12 +41,20 @@ elif [ ! -d "$PARENT/pcrecomp" ] && [ -d "$PARENT/tools/runtime/dos32" ]; then T
 else TOOLKIT=$PARENT/pcrecomp; fi
 PCRECOMP_URL=https://github.com/sp00nznet/pcrecomp
 
+N=5; [ -n "$TARGETS" ] && N=6
 say()  { printf '%s\n' "$*"; }
 step() { printf '\n\033[36m%s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31mSetup stopped: %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ---- 1. tools -------------------------------------------------------------------
-step "[1/5] Checking the tools"
+step "[1/$N] Checking the tools"
+if [ "$(uname)" = Darwin ]; then   # Xcode's command line tools and Homebrew; what is missing from brew is installed
+  xcode-select -p >/dev/null 2>&1 || fail "Xcode's command line tools are missing: run xcode-select --install, then this again."
+  command -v brew >/dev/null || fail "Homebrew is missing: install it from https://brew.sh, then run this again."
+  for f in cmake pkg-config sdl2 innoextract python; do
+    brew list --formula "$f" >/dev/null 2>&1 || { say "  brew install $f"; brew install --quiet "$f" || fail "brew could not install $f."; }
+  done
+fi
 need=()
 for t in gcc cmake python3 git pkg-config; do command -v "$t" >/dev/null || need+=("$t"); done
 command -v pkg-config >/dev/null && ! pkg-config --exists sdl2 && need+=("SDL2's development files")
@@ -75,7 +86,7 @@ game_in() {
   done
 }
 
-step "[2/5] Copying your copy of Theme Park into game/"
+step "[2/$N] Copying your copy of Theme Park into game/"
 if [ -n "$(game_in game)" ]; then
   say "  already in game/"
 else
@@ -133,7 +144,7 @@ fi
 main_exe=$(find game -ipath 'game/GAME/MAIN.EXE' | head -1)
 
 # ---- 3. the toolkit -------------------------------------------------------------
-step "[3/5] The pcrecomp toolkit"
+step "[3/$N] The pcrecomp toolkit"
 if [ ! -f "$TOOLKIT/tools/lift/lift32.py" ]; then
   say "  fetching it into $TOOLKIT"
   git clone --quiet --depth 1 "$PCRECOMP_URL" "$TOOLKIT"
@@ -156,7 +167,7 @@ say "  $TOOLKIT"
 export PCRECOMP=$TOOLKIT
 
 # ---- 4. lift + build ------------------------------------------------------------
-step "[4/5] Lifting MAIN.EXE to C, then building (the first lift finds the functions: a few minutes)"
+step "[4/$N] Lifting MAIN.EXE to C, then building (the first lift finds the functions: a few minutes)"
 # Every time: lifted C from an older run_lift.py would not match this code (#37). The slow part,
 # finding the functions, is kept in analysis/, so a lift again takes seconds.
 python3 run_lift.py --exe "$main_exe" || fail "the lift failed."
@@ -169,6 +180,44 @@ cmake --build build-linux -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" || fail
 # ---- 5. launcher ----------------------------------------------------------------
 printf '#!/bin/sh\ncd "$(dirname "$0")" && exec build-linux/themepark "$@"\n' > themepark.sh
 chmod +x themepark.sh
-step "[5/5] Ready: ./themepark.sh"
+if [ "$(uname)" = Darwin ]; then   # Finder opens a .command in Terminal; a .sh in an editor
+  printf '#!/bin/sh
+cd "$(dirname "$0")" && exec build-linux/themepark "$@"
+' > "Theme Park (recomp).command"
+  chmod +x "Theme Park (recomp).command"
+fi
+step "[5/$N] Ready: ./themepark.sh"
 say "Click in the picture to play; F10 for the settings menu (save states, window size, scaling...)."
 [ "$(uname)" = Darwin ] || say "Music needs a General MIDI synth on ALSA's sequencer: FluidSynth or TiMidity++ running as a server."
+
+# ---- 6. the browser and the 3DS, if asked for -----------------------------------
+# Each in its toolchain's Docker image (pulled the first time only), so nothing
+# more is installed here. The lifted C from step 4 is built again for each.
+[ -n "$TARGETS" ] || exit 0
+step "[6/$N] Other builds: $TARGETS (in Docker; the first pulls its toolchain, 2 to 4 GB)"
+command -v docker >/dev/null || fail "these need Docker (https://docs.docker.com/get-docker/); the build for this computer is ready."
+docker info >/dev/null 2>&1 || fail "Docker is not running: start it, then run this again (finished steps are quick)."
+dock() { docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e EM_CACHE=/src/builds/.web/.emcache -v "$ROOT:/src" -v "$TOOLKIT:/pcrecomp" -w /src "$1" sh -c "$2"; }
+for t in $TARGETS; do
+  case $t in
+    web)
+      say "  the browser (emscripten/emsdk)"
+      dock emscripten/emsdk 'for i in 1 2 3; do embuilder build sdl2 >/dev/null && break; done; emcmake cmake -B builds/.web -DPCRECOMP=/pcrecomp >/dev/null && cmake --build builds/.web -j8' || fail "the browser build failed."
+      mkdir -p builds/web
+      cp builds/.web/themepark.* builds/web/ && cp tools/serve_wasm.py builds/web/
+      printf '#!/bin/sh
+# Serves the browser build to this computer only (your game is packed in it).
+cd "$(dirname "$0")/builds/web" && (sleep 1; xdg-open http://localhost:8000/themepark.html 2>/dev/null || open http://localhost:8000/themepark.html) & exec python3 serve_wasm.py . 8000
+' > "Theme Park (browser).sh"
+      chmod +x "Theme Park (browser).sh"
+      say "  builds/web: ./\"Theme Park (browser).sh\" and open http://localhost:8000/themepark.html in Chrome" ;;
+    3ds)
+      say "  the 3DS (devkitpro/devkitarm)"
+      dock devkitpro/devkitarm 'cmake -B builds/.3ds -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/3DS.cmake -DPCRECOMP=/pcrecomp >/dev/null && cmake --build builds/.3ds -j8' || fail "the 3DS build failed."
+      mkdir -p builds/3ds/themepark
+      cp builds/.3ds/themepark.3dsx builds/3ds/themepark/ && cp -R game builds/3ds/themepark/
+      say "  builds/3ds/themepark: copy that folder to the SD card as sdmc:/3ds/themepark" ;;
+    *) say "  $t: not a target here (web, 3ds)" ;;
+  esac
+done
+say "Done."

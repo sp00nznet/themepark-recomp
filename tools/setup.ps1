@@ -9,7 +9,8 @@
 # -Yes installs what is missing without asking; -Game (or -GameDir) is the
 # game's folder, the CD's drive, GOG's offline installer or the folder it is
 # in. RECOMP_LAUNCHER=1 (the recomp launcher) skips the "Press Enter".
-param([switch]$Force, [switch]$Yes, [Alias('GameDir')][string]$Game = "")
+# -Targets web,3ds also builds for the browser and the 3DS, in Docker (builds\web, builds\3ds).
+param([switch]$Force, [switch]$Yes, [Alias('GameDir')][string]$Game = "", [string]$Targets = "")
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -21,7 +22,8 @@ $Toolkit = if ($env:PCRECOMP) { $env:PCRECOMP }
   else { Join-Path $Parent 'pcrecomp' }
 $Log = Join-Path $Root 'setup.log'
 Set-Location $Root
-$Steps = 5
+$TargetList = @($Targets -split '[,\s]+' | Where-Object { $_ })
+$Steps = if ($TargetList.Count) { 6 } else { 5 }
 function Log($t) { try { Add-Content -Path $Log -Value $t -Encoding UTF8 -ErrorAction Stop } catch {} }
 Log "==== setup $(Get-Date -Format s)"
 
@@ -242,6 +244,36 @@ Set-Content -Path $lnk -Encoding ASCII -Value @(
   'cd /d "%~dp0"',
   'start "" build\themepark.exe')
 Say "  $lnk"
+
+# ---------------------------------------------------------------- the browser and the 3DS, if asked for
+# Each in its toolchain's Docker image (pulled the first time only), so nothing
+# more is installed here. The lifted C from step 3 is built again for each.
+if ($TargetList.Count) {
+  Step 6 "Other builds: $($TargetList -join ', ') (in Docker; the first pulls its toolchain, 2 to 4 GB)"
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail "these need Docker Desktop (https://docs.docker.com/desktop/); the Windows build is ready." }
+  if ((Exec @('docker', 'info')) -ne 0) { Fail "Docker is not running: start Docker Desktop, then run this again (finished steps are quick)." }
+  function Dock($image, $sh) { Run "Building in $image" @('docker', 'run', '--rm', '-e', 'EM_CACHE=/src/builds/.web/.emcache', '-v', "${Root}:/src", '-v', "${Toolkit}:/pcrecomp", '-w', '/src', $image, 'sh', '-c', $sh) }
+  foreach ($t in $TargetList) {
+    if ($t -eq 'web') {
+      Dock 'emscripten/emsdk' 'for i in 1 2 3; do embuilder build sdl2 >/dev/null && break; done; emcmake cmake -B builds/.web -DPCRECOMP=/pcrecomp >/dev/null && cmake --build builds/.web -j8'
+      New-Item -ItemType Directory -Force 'builds\web' | Out-Null
+      Copy-Item 'builds/.web\themepark.*', 'tools\serve_wasm.py' 'builds\web\'
+      Set-Content -Path (Join-Path $Root 'Theme Park (browser).cmd') -Encoding ASCII -Value @(
+        '@echo off',
+        'rem Serves the browser build to this computer only (your game is packed in it), then opens it.',
+        'cd /d "%~dp0builds\web"',
+        'start "" http://localhost:8000/themepark.html',
+        'py -3 serve_wasm.py . 8000 || python serve_wasm.py . 8000')
+      Say "  builds\web: double-click 'Theme Park (browser).cmd' (Chrome or Edge)"
+    } elseif ($t -eq '3ds') {
+      Dock 'devkitpro/devkitarm' 'cmake -B builds/.3ds -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/3DS.cmake -DPCRECOMP=/pcrecomp >/dev/null && cmake --build builds/.3ds -j8'
+      New-Item -ItemType Directory -Force 'builds\3ds\themepark' | Out-Null
+      Copy-Item 'builds/.3ds\themepark.3dsx' 'builds\3ds\themepark\'
+      Exec @('robocopy', 'game', 'builds\3ds\themepark\game', '/E', '/NFL', '/NDL', '/NJH', '/NJS') | Out-Null
+      Say "  builds\3ds\themepark: copy that folder to the SD card as sdmc:/3ds/themepark"
+    } else { Say "  ${t}: not a target here (web, 3ds)" }
+  }
+}
 Write-Host ""
 Say "Done. Double-click 'Theme Park (recomp).cmd' to play." 'Green'
 Pause-End

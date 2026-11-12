@@ -102,7 +102,7 @@ Real output of the recompiled game.
 
 ## Getting Started
 
-You need Windows 10 or 11 (x64), or Linux (below), and Theme Park: from GOG, either installed
+You need Windows 10 or 11 (x64), Linux or macOS (below), and Theme Park: from GOG, either installed
 through GOG Galaxy or GOG's offline installer
 (`setup_theme_park_1.01_cs_(77027).exe`), or the original 1994 CD (the UK
 release or EA's CD-ROM Classics reissue; mount an ISO by double-clicking it).
@@ -128,8 +128,10 @@ welcome.
 
 From the [releases](https://github.com/sp00nznet/themepark-recomp/releases),
 download the installer for your system:
-`ThemePark-Recomp-Installer-windows-x64.exe`, or
-`ThemePark-Recomp-Installer-linux-x64.tar.gz` (unpack it, then run it).
+`ThemePark-Recomp-Installer-windows-x64.exe`,
+`ThemePark-Recomp-Installer-linux-x64.tar.gz` (unpack it, then run it), or
+`ThemePark-Recomp-Installer-macos-arm64.zip` (unzip it; the first time,
+right-click the app and **Open**, as it isn't notarised).
 
 1. It finds GOG's install by itself. Otherwise, **Choose folder…** and pick
    one of these:
@@ -139,7 +141,14 @@ download the installer for your system:
 2. **Build**: it downloads this repository and pcrecomp, then runs the same
    setup as below with no questions. On Windows, a first build installs the
    compilers it needs. On Linux, it tells you which packages to install.
-3. **Play**. Next time it opens straight to this.
+   Tick **Also for the browser** and/or **Also for a Nintendo 3DS** to get
+   those builds too, in `builds/web` and `builds/3ds`. They are built in
+   Docker (it must be installed and running), whose toolchain images are
+   downloaded the first time only (about 3.5 GB and 2 GB). Untick them and
+   only your system's build is made.
+3. **Play**. Next time it opens straight to this. With the browser build
+   there is a second button, *Theme Park (browser)*: it serves the game to
+   this computer only and opens it.
 
 Nothing of the game is in the installer. The build is made from your copy and
 stays on your machine. The installer isn't signed: Windows SmartScreen asks
@@ -238,8 +247,10 @@ The same native program as on Linux, built with Apple's clang and SDL2.
 Checked headless on macOS 15 (Intel): conformance 6/6, modern rules and a
 network game. Not yet played by hand, nor tried on Apple Silicon.
 
-1. `xcode-select --install`, then `brew install cmake pkg-config sdl2 innoextract`
-2. `./setup.sh` (as on Linux), then `./themepark.sh`
+1. `xcode-select --install`, and [Homebrew](https://brew.sh)
+2. `./setup.sh` (as on Linux; it installs CMake, pkg-config, SDL2, Python and
+   innoextract with brew if they are missing), then double-click
+   `Theme Park (recomp).command` or run `./themepark.sh`
 
 Music plays on Apple's built-in General MIDI synth; nothing to set up.
 
@@ -302,6 +313,10 @@ folder, `PCRECOMP` for another toolkit). On Linux, `python3 run_lift.py` then
 systems, so either can build from the other's `src/recomp/gen/`. The lifted C
 is generated from your copy of the game on your machine and is never
 distributed.
+
+`./setup.sh --targets web,3ds` (`Setup.cmd -Targets web,3ds` on Windows)
+builds both of these in Docker after the build for your system, into
+`builds/web` and `builds/3ds/themepark`. By hand:
 
 In a browser (experimental): with Docker,
 `docker run --rm -v "$PWD/..:/pc" -w /pc/themepark emscripten/emsdk sh -c 'emcmake cmake -B build-wasm -DPCRECOMP=/pc/tools && cmake --build build-wasm -j8'`
