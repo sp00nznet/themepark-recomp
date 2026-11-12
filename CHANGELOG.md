@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A **macOS installer** (`ThemePark-Recomp-Installer-macos-arm64.zip`);
+  setup installs what it needs with Homebrew and leaves
+  `Theme Park (recomp).command` for Finder.
+- Every installer can also build for the **browser** and the **3DS**: tick
+  them before *Build* (Docker needed; their toolchains are downloaded only
+  when ticked). `setup.sh --targets web,3ds`, `Setup.cmd -Targets web,3ds`.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added

@@ -4,17 +4,61 @@
   "accent": "#3c9a2e",
   "note": {
     "windows": "The first build takes 15 to 30 minutes and about 2 GB. Python, LLVM, CMake, Ninja and the Visual Studio Build Tools (about 3 GB) are installed if they are missing; Windows asks for permission once. Works with GOG's release (installed, or its offline installer) and the 1994 CD.",
-    "default": "The first build takes 10 to 20 minutes and about 2 GB. It needs gcc, CMake, Python 3, git, SDL2 and ALSA's development files (and innoextract for GOG's installer) from your package manager; if any are missing it says which, with the command to install them. Works with GOG's release and the 1994 CD."
+    "default": "The first build takes 10 to 20 minutes and about 2 GB. It needs gcc, CMake, Python 3, git, SDL2 and ALSA's development files (and innoextract for GOG's installer) from your package manager; if any are missing it says which, with the command to install them. Works with GOG's release and the 1994 CD.",
+    "darwin": "The first build takes 10 to 20 minutes and about 2 GB. It needs Xcode's command line tools (xcode-select --install) and Homebrew (brew.sh); CMake, pkg-config, SDL2, Python and innoextract are installed with brew if missing. Music plays on Apple's built-in synth. Works with GOG's release and the 1994 CD."
   },
   "game": {
     "name": "Theme Park",
-    "files": ["GAME/MAIN.EXE|game/main.exe|GAME/main.exe|game/MAIN.EXE|setup_theme_park*.exe"],
-    "registry": ["HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1207660423\\path", "HKLM\\SOFTWARE\\GOG.com\\Games\\1207660423\\path"]
+    "files": [
+      "GAME/MAIN.EXE|game/main.exe|GAME/main.exe|game/MAIN.EXE|setup_theme_park*.exe"
+    ],
+    "registry": [
+      "HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1207660423\\path",
+      "HKLM\\SOFTWARE\\GOG.com\\Games\\1207660423\\path"
+    ]
   },
-  "sources": [{ "repo": "sp00nznet/pcrecomp", "ref": "main", "dir": "pcrecomp" }],
+  "sources": [
+    {
+      "repo": "sp00nznet/pcrecomp",
+      "ref": "main",
+      "dir": "pcrecomp"
+    }
+  ],
   "setup": {
-    "windows": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools\\setup.ps1", "-Yes", "-Game", "{game}"],
-    "default": ["bash", "setup.sh", "--yes", "--game-dir", "{game}"]
+    "windows": [
+      "powershell",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "tools\\setup.ps1",
+      "-Yes",
+      "-Game",
+      "{game}",
+      "-Targets",
+      "{choices}"
+    ],
+    "default": [
+      "bash",
+      "setup.sh",
+      "--yes",
+      "--game-dir",
+      "{game}",
+      "--targets",
+      "{choices}"
+    ]
   },
-  "play": "[Tt]heme*"
+  "play": "[Tt]heme*",
+  "choices": [
+    {
+      "id": "web",
+      "label": "Also for the browser",
+      "note": "In Docker (needs Docker running): about 3.5 GB of toolchain the first time. Play it in Chrome from this computer."
+    },
+    {
+      "id": "3ds",
+      "label": "Also for a Nintendo 3DS",
+      "note": "In Docker (needs Docker running): about 2 GB of toolchain the first time. Homebrew Launcher .3dsx."
+    }
+  ]
 }

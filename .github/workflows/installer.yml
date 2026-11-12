@@ -1,4 +1,4 @@
-# The installer for this commit, for Windows and Linux (recomp-launcher with
+# The installer for this commit, for Windows, Linux and macOS (recomp-launcher with
 # launcher/launcher.json): artifacts on every push to main, release files on
 # a v* tag. The game itself is never in it: the installer builds from the
 # player's own copy.
@@ -19,4 +19,3 @@ jobs:
     with:
       launcher-ref: v0.6.0
       name: ThemePark-Recomp-Installer
-      platforms: windows linux

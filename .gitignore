@@ -20,7 +20,8 @@ __pycache__/
 stdout.txt
 stderr.txt
 setup.log
-Theme Park (recomp).cmd
+Theme Park (*
+builds/
 themepark.sh
 
 # Mods are the player's own; only the instructions are ours
