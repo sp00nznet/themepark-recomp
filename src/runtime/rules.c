@@ -77,6 +77,9 @@ const rule_t rule_list[] = {
     { RULE_ENGINEERS, "engineers", "Engineers reach their rides",
       "Engineers take the shortest way to a broken ride and round it, past hedges, walls and fences, put the hoardings up "
       "and down twice as fast, and after a repair walk to the nearest free patch of grass (#40)." },
+    { RULE_ERASE, "erase", "Right-drag removes paths",
+      "With the path tool, hold the right button and sweep: every path and queue tile the pointer crosses is taken up, "
+      "not only the first (#45)." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -1075,7 +1078,25 @@ void key_read(void (*lifted)(void)) {          /* 0x46E888(): the poll reads a k
     else if (s == 0 && in_world_map) esc_click(0x238 + 29, 0x16E + 10);    /* 0x44644F */
 }
 
+/* ---- right-drag removes paths (#45) ------------------------------------- */
+/* With the path tool (mode [0x4C6670] 2), a right press issues command 0x24
+ * (take up the path at a tile) for the tile under the pointer ([0x4C6676]),
+ * once. With the rule, while the right button stays down ([0x4CE5AA]) each new
+ * tile the pointer reaches gets the same command through the player's own
+ * command slot, so a network game sees it as it sees a click. */
+static void erase_drag(void) {
+    static int last = -1;
+    if (!(tp_rules & RULE_ERASE) || !M16(0x4CE5AA) || M16(0x4C6670) != 2 || M16(0x4C6652)) { last = -1; return; }
+    int t = M16(0x4C6676);
+    uint32_t slot = 0x4C441E + 6u * M16(0x4C665C);
+    if (last < 0) { last = t; return; }           /* the press itself: the game's own */
+    if (t == last || t >= 4096 || M8(slot + 1) || !(tflags(t) & 2)) return;
+    M8(slot + 1) = 0x24; M16(slot + 2) = (uint16_t)t;
+    last = t;
+}
+
 void rules_frame(void) {   /* game.c, between frames on the game thread */
+    erase_drag();
     lights_frame();
     esc_keys();
     front_row();

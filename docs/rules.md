@@ -23,6 +23,7 @@ building=1
 lights=1
 esc=1
 deal=1
+erase=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -267,6 +268,16 @@ lunch 3 s at most.
 
 Not changed: the hoarding's look (new art), and where engineers rest (the
 nearest free grass, as in 1994, not a staff room).
+
+### Right-drag removes paths (`erase`, issue #45)
+
+**In 1994:** with the path tool, a right click takes up one tile of path or
+queue. Holding the button and moving takes up only the first tile.
+
+**With the rule:** hold the right button and sweep. Every path and queue tile
+the pointer crosses is taken up, through the same command a right click
+sends, so a network game sees it
+as clicks. Only paths: rides, shops and scenery keep their own ways of going.
 
 ## Asked for, and not possible
 

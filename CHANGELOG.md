@@ -16,6 +16,12 @@ versions follow [SemVer](https://semver.org/).
   PlayStation disc (bin/cue): its 17 CD ride tunes and the heartbeat, named
   from the disc's own track list.
 
+- Modern rule **Right-drag removes paths** (`erase`, #45): with the path
+  tool, hold the right button and sweep to take up a whole stretch of path
+  or queue, not one tile per click.
+- `--drag T:x,y,x2,y2[,buttons]` for scripted runs: press, a second's slide,
+  release.
+
 ### Changed
 - Network game (#37): only the host sets the game speed and the game type;
   the advisor and charts call other players by the names they typed, not

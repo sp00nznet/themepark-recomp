@@ -234,6 +234,22 @@ def deal(exe):
     return check(n['none'] > 1 and n['deal'] == 1, 'deal: one cheer, at the handshake (%d -> %d)' % (n['none'], n['deal']))
 
 
+def erase(exe):
+    # The path tool, then a right-button sweep along the path at row 18: the game takes up the
+    # first tile only; with the rule every path tile the pointer crosses.
+    sweep = ['--click', '62:22,457', '--drag', '64:330,229,590,229,2']
+    n = {}
+    for r in ('none', 'erase'):
+        path = os.path.join(HERE, 'work', 'rulescheck.bin')   # in the hi-res park: --lowres moves the tiles
+        subprocess.run([exe, '--headless', '--mute', '--seconds', '66', '--rules', r] + DEMO + sweep +
+                       ['--dump', '65.5:' + path], cwd=HERE, capture_output=True, timeout=1800)
+        d = open(path, 'rb').read()
+        os.remove(path)
+        tiles = int.from_bytes(d[0x4C3B08 - 0x400000:][:4], 'little') - 0x400000
+        n[r] = sum(d[tiles + 4 * (18 * 64 + x) + 2] == 0 for x in range(50, 62))
+    return check(n['none'] == 1 and n['erase'] >= 10, 'erase: a sweep takes up the path (%d -> %d tiles)' % (n['none'], n['erase']))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -244,7 +260,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe), esc(exe), deal(exe), engineers(exe)])
+              lights(exe), esc(exe), deal(exe), engineers(exe), erase(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

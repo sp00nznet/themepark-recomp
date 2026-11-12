@@ -31,6 +31,7 @@ All times are guest seconds; positions are game pixels (320x200 in the menus,
 |---|---|
 | `--click T:x,y` | left press at T, release 4 frames later, the pointer moved there first |
 | `--key T:sc` | press a key, release it a sixth of a second later; `sc` is a set-1 scancode in hex (`1C` Enter, `39` space, `3B` F1, `18` O) |
+| `--drag T:x,y,x2,y2[,b]` | press at x,y, slide to x2,y2 over a second, release; `b` the buttons (1 left, 2 right) |
 | `--move T:dx,dy` | relative mouse motion, as the captured mouse sends it (pushing past an edge scrolls the park) |
 | `--save T:slot`, `--load T:slot` | save or load a save state (slots 1-9, `states\` beside the exe) |
 | `--fps-at T:N` | change the frame rate at T (0 = unpaced) |
@@ -108,8 +109,8 @@ and 12 thugs (all caught with the rule, 5 without), a guest put in a fenced
 pocket (it walks out with the rule and stays stuck without), a ride marked
 as just researched (the advisor says so), a guard dropped mid-escort (her
 thug is let go), the entertainers' made-happy count, a handyman dropped on a
-ride (he finds a path), and fences and lamps placed under the coaster and on
-a path. Under a minute in all.
+ride (he finds a path), fences and lamps placed under the coaster and on
+a path, and a right-button sweep along a path. Under a minute in all.
 
 ## On netlab
 

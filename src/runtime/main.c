@@ -66,7 +66,7 @@ static long game_frame0;          /* frame_no when MAIN.EXE started (after the i
 /* Scripted input for headless runs: --click T:x,y and --key T:sc (seconds
  * of guest time, game pixels, a set-1 scancode in hex). Each fires once at
  * its frame of the 70 Hz clock; a click is a press then a release. */
-typedef struct { long frame; int kind, a, b; } ev_t;
+typedef struct { long frame; int kind, a, b, c, d; } ev_t;
 static char dump_path[8][MAX_PATH];
 static int ndump;
 static ev_t evs[256];
@@ -76,8 +76,11 @@ static int nev;
 long frame_no;               /* 70 Hz frames of guest time; sound.c logs with it */
 
 static void add_event(int kind, const char* spec) {
-    double t; int a = 0, b = 0;
+    double t; int a = 0, b = 0, c = 0, d = 0;
     if (nev >= 256) return;
+    int btn = 1;   /* --drag T:x,y,x2,y2[,buttons]: 2 the right */
+    if (kind == 'D' && sscanf(spec, "%lf:%d,%d,%d,%d,%d", &t, &a, &b, &c, &d, &btn) < 5) return;
+    if (kind == 'D') d = d * 4 + btn;
     if ((kind == 'c' || kind == 'm') && sscanf(spec, "%lf:%d,%d", &t, &a, &b) != 3) return;
     if (kind == 'k' && sscanf(spec, "%lf:%x", &t, &a) != 2) return;
     if ((kind == 'f' || kind == 's' || kind == 'l') && sscanf(spec, "%lf:%d", &t, &a) != 2) return;
@@ -92,7 +95,7 @@ static void add_event(int kind, const char* spec) {
     }
     if (kind == 'd') { if (sscanf(spec, "%lf:", &t) != 1 || ndump >= 8) return;
                        snprintf(dump_path[ndump], MAX_PATH, "%s", strchr(spec, ':') + 1); a = ndump++; }
-    evs[nev].frame = (long)(t * 70); evs[nev].kind = kind; evs[nev].a = a; evs[nev].b = b; nev++;
+    evs[nev].frame = (long)(t * 70); evs[nev].kind = kind; evs[nev].a = a; evs[nev].b = b; evs[nev].c = c; evs[nev].d = d; nev++;
 }
 
 static void run_events(void) {
@@ -102,6 +105,12 @@ static void run_events(void) {
             if (f == frame_no - 6) dos32_mouse(evs[i].a, evs[i].b, 0);   /* move there first */
             if (f == frame_no) dos32_mouse(evs[i].a, evs[i].b, 1);
             if (f == frame_no - 4) dos32_mouse(evs[i].a, evs[i].b, 0);
+        } else if (evs[i].kind == 'D') {          /* --drag T:x,y,x2,y2: press, a second's slide, release */
+            long k = frame_no - f;
+            if (k >= -6 && k <= 74) {
+                long j = k < 0 ? 0 : k > 70 ? 70 : k;
+                dos32_mouse(evs[i].a + (int)((evs[i].c - evs[i].a) * j / 70), evs[i].b + (int)((evs[i].d / 4 - evs[i].b) * j / 70), k >= 0 && k < 74 ? evs[i].d % 4 : 0);
+            }
         } else if (evs[i].kind == 'm') {          /* --move T:dx,dy: relative, as a captured mouse */
             if (f == frame_no) dos32_mouse_move(evs[i].a, evs[i].b, 0);
         } else if (evs[i].kind == 'd') {
@@ -336,6 +345,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--lang") && i + 1 < argc) {
             char* l = strstr(args, "-l"); if (l) l[2] = argv[++i][0]; }
         else if (!strcmp(argv[i], "--click") && i + 1 < argc) add_event('c', argv[++i]);
+        else if (!strcmp(argv[i], "--drag") && i + 1 < argc) add_event('D', argv[++i]);
         else if (!strcmp(argv[i], "--key") && i + 1 < argc) add_event('k', argv[++i]);
         else if (!strcmp(argv[i], "--move") && i + 1 < argc) add_event('m', argv[++i]);
         else if (!strcmp(argv[i], "--fps-at") && i + 1 < argc) add_event('f', argv[++i]);
