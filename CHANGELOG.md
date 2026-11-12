@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-12
+
 ### Added
 - A **macOS installer** (`ThemePark-Recomp-Installer-macos-arm64.zip`);
   setup installs what it needs with Homebrew and leaves
