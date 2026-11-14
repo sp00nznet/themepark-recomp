@@ -1,7 +1,8 @@
 # Theme Park — static recompilation
 
 A static recompilation of Bullfrog's **Theme Park** (DOS, 1994) to a native
-Windows and Linux program. The game's own 32-bit code is translated to C by
+Windows, Linux and macOS program, with experimental browser and Nintendo 3DS
+builds. The game's own 32-bit code is translated to C by
 [pcrecomp](https://github.com/sp00nznet/pcrecomp) and runs on its DOS/4GW host;
 no emulator and no DOSBox. You supply your own copy (GOG's, or the 1994 CD); nothing
 from the game is in this repository.
@@ -51,14 +52,21 @@ What this adds to the 1994 DOS game, beyond running it natively:
 - **Native on Linux.** The same lifted C built with gcc and SDL2: every
   feature above, no Wine and no DOSBox. A scripted run leaves the game's memory
   identical byte for byte to the Windows build's (pcrecomp#84).
-- **One-click setup** from your GOG install, GOG's offline installer or the 1994 CD
-  (`Setup.cmd` on Windows, `./setup.sh` on Linux).
+- **Native on macOS** too, with clang and SDL2; music on Apple's built-in synth.
+- **In a browser or on a 3DS** (experimental): tick them in the installer and
+  they are built from your copy in Docker.
+- **Right-drag to remove paths**, one of the modern rules: sweep with the right
+  button to take up a whole stretch of path or queue.
+- **Music packs**, including one made from your own PlayStation disc's CD
+  audio (`tools/psxmusic.py`).
+- **One-click setup** from your GOG install, GOG's offline installer or the 1994 CD:
+  an installer for Windows, Linux and macOS, or `Setup.cmd` / `./setup.sh`.
 - **Headless runs** for testing: scripted input, `--record` to video with
   sound, save and load on cue, and a conformance check.
 
 ## Status
 
-**v0.6.0.** The whole game is lifted (6,517 functions, no lift errors)
+**v0.7.1.** The whole game is lifted (6,517 functions, no lift errors)
 and runs from the title through the name prompt, menus, new-game setup and
 world map into a running park, and a tester has been playing it since 0.2
 (their reports are the GitHub issues). Sound effects and music play through the host (HMI SOS replaced;
@@ -76,15 +84,16 @@ world map into a running park, and a tester has been playing it since 0.2
 | Settings menu (F10) | scaling, colour, speed, fullscreen, mute, 640x480 default |
 | 640x480 SVGA mode | the game's own hi-res park view, now the default (R toggles, `--lowres` for the original) |
 | Wider parks | the park at any width from 640 to 1920 at 480 high (16:9 is 856x480): F10, *Park resolution*, or `--res`; the panel stays 640 wide ([docs/resolutions.md](docs/resolutions.md)) |
-| Sound effects | each group on or off in F10, *Sound effects*: sales, booing, being sick, thugs' motorbikes and more ([docs/sound.md](docs/sound.md)) |
-| Modern rules | fixes to the 1994 game's staff, guests and building, each off until ticked in F10, *Modern rules*: guards that chase thugs, guests that get unstuck, an advisor that keeps advising, entertainers that entertain, handymen that stay on their paths, fences under track, lamps and fountains on paths, lamps that light up in storms, Esc that closes windows ([docs/rules.md](docs/rules.md)) |
-| Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank) |
+| Sound effects | host mixer, 44.1 kHz 16-bit (the SB16 bank); each group on or off in F10, *Sound effects*: sales, booing, being sick, thugs' motorbikes and more ([docs/sound.md](docs/sound.md)) |
+| Modern rules | fixes to the 1994 game's staff, guests and building, each off until ticked in F10, *Modern rules*: guards that chase thugs, guests that get unstuck, an advisor that keeps advising, entertainers that entertain, handymen that stay on their paths, fences under track, lamps and fountains on paths, lamps that light up in storms, Esc that closes windows, right-drag to remove paths ([docs/rules.md](docs/rules.md)) |
 | Music | the game's General MIDI songs on the Windows synth, or a music pack of recordings (F10, *Music*; [music/README.md](music/README.md)) |
 | Save states | 9 slots in the settings menu (F10) |
 | The game's own saves | untested |
 | Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
+| Browser | experimental (Emscripten): intro, menus and parks play; no music or network game yet |
+| Nintendo 3DS | experimental homebrew: checked in the Azahar emulator, not yet on hardware |
 | Linux | native (gcc, SDL2): conformance 6/6 and save states checked headless; the window, mouse and pad not yet played by hand; music needs a GM synth on ALSA (FluidSynth, TiMidity++) |
-| macOS | native (clang, SDL2), Intel: conformance 6/6, rulescheck and mpcheck pass headless; not played by hand; Apple Silicon untried; music on Apple's DLS synth |
+| macOS | native (clang, SDL2), Intel: conformance 6/6, rulescheck and mpcheck pass headless; not played by hand; Apple Silicon untried (the installer is built for it); music on Apple's DLS synth |
 
 Conformance (`tools/conformance.py`): **6/6 milestones** — title, name prompt,
 main menu, park calendar running, no faults, no unresolved dispatches.
