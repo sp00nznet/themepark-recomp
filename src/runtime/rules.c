@@ -80,6 +80,9 @@ const rule_t rule_list[] = {
     { RULE_ERASE, "erase", "Right-drag removes paths",
       "With the path tool, hold the right button and sweep: every path and queue tile the pointer crosses is taken up, "
       "not only the first (#45)." },
+    { RULE_PARK_GUESTS_ONLY, "park-guests-only", "Needs overview counts park guests only",
+      "The hunger and thirst overview counts only visitors inside the park, "
+      "excluding people before entry and after departure." },
 };
 const int rule_count = sizeof rule_list / sizeof rule_list[0];
 
@@ -1115,6 +1118,55 @@ void rules_frame(void) {   /* game.c, between frames on the game thread */
                     t == 0x1A ? "thug" : "guard", (p - M32(PEOPLE)) / REC, M8(p + 0xC), M8(p + 0xD),
                     M8(p + 7), M8(p + 9), M8(p + 5), M16(p + 0x1E));
     }
+}
+
+/* ---- hunger/thirst overview ---------------------------------------------- */
+/* 0x43091A updates the visitor overview's two rows:
+ *   Top:    happy / undecided / unhappy, from the counters for guests inside.
+ *   Bottom: hungry / thirsty / both / neither. The original counts all guest
+ *           records here, including people who are outside the park.
+ * Each row has 20 icons representing proportions, not 20 individual guests.
+ *
+ * RULE_PARK_GUESTS_ONLY recalculates the BOTTOM HUNGER/THIRST ROW using only
+ * guests inside the park. The original still calculates the top happiness
+ * row. Guest needs, purchases, stock and other simulation data are untouched. */
+void needs_overview(void (*lifted)(void)) {
+    lifted();
+    if (!(tp_rules & RULE_PARK_GUESTS_ONLY)) return;
+
+    /* counts: both, hungry only, thirsty only. total also includes guests
+     * who are neither hungry nor thirsty, so percentages use all guests inside. */
+    uint32_t counts[3] = { 0, 0, 0 }, total = 0;
+    for (uint32_t p = M32(PEOPLE) + REC; p < M32(PEOPLE_END); p += REC) {
+        /* Person +4: type 2 = visitor. Visitor +0x4F: 0xFF = outside the park,
+         * the same marker used by the game's park population counters. */
+        if (M8(p + 4) != 2 || M8(p + 0x4F) == 0xFF) continue;
+        /* +0x50 = food fullness; +0x51 = drink fullness. Both are signed
+         * bytes: with the rule, below 3 means hungry/thirsty; 3 is sufficient. */
+        int hungry = (int8_t)M8(p + 0x50) < 3;
+        int thirsty = (int8_t)M8(p + 0x51) < 3;
+        total++;
+        if (hungry && thirsty) counts[0]++;
+        else if (hungry) counts[1]++;
+        else if (thirsty) counts[2]++;
+    }
+
+    /* The bottom hunger/thirst row starts at 0x4BC944. Each of its 20 icon
+     * records occupies 15 bytes; offset +0xD selects the thought bubble:
+     *   8 = hungry AND thirsty, 4 = hungry only, 5 = thirsty only, 6 = neither.
+     * Match the original layout: draw both first, then hungry only, then
+     * thirsty only. Each count * 20 / total uses integer division, rounding
+     * down. Fill every remaining icon with "neither", including rounding gaps.
+     * If nobody is inside, set all 20 icons to "neither" so complaints from
+     * the previous overview update do not remain on screen. */
+    static const uint8_t thoughts[3] = { 8, 4, 5 };
+    unsigned slot = 0;
+    for (unsigned kind = 0; kind < 3; kind++) {
+        unsigned icons = total ? counts[kind] * 20 / total : 0;
+        for (unsigned i = 0; i < icons; i++, slot++)
+            M8(0x4BC944 + slot * 15 + 0xD) = thoughts[kind];
+    }
+    for (; slot < 20; slot++) M8(0x4BC944 + slot * 15 + 0xD) = 6;
 }
 
 /* ---- negotiation sounds (#49) -------------------------------------------- */
