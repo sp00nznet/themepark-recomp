@@ -102,6 +102,7 @@ OVERRIDES = {
     0x00470990: 'song_stop', 0x00470FE0: 'effect_start', 0x00470C80: 'effect_note',
     0x004249EB: 'walk_step', 0x00423482: 'eng_walk', 0x00423E3F: 'eng_lunch',
     0x0046E888: 'key_read', 0x004460D2: 'world_map',
+    0x0043091A: 'needs_overview',
 }
 
 # INTRO.EXE, the opening film: the same libraries as MAIN.EXE, so the same

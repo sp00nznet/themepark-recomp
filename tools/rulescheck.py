@@ -16,6 +16,7 @@ then runs headless with the rule off and on:
   lights   the demo park in a storm: do the lamps glow
   deal     (a new park) staff negotiation, offer just under the demand: one cheer
   engineers an engineer hedged in on a lawn and sent walking: does he get there
+  park-guests-only  overview excludes outside visitors without changing guest records
 Needs game/ (setup) and a build. Takes a few minutes.
 """
 import argparse
@@ -250,6 +251,71 @@ def erase(exe):
     return check(n['none'] == 1 and n['erase'] >= 10, 'erase: a sweep takes up the path (%d -> %d tiles)' % (n['none'], n['erase']))
 
 
+def park_guests_only(exe):
+    import struct
+
+    u32 = lambda d, a: struct.unpack_from('<I', d, a - 0x400000)[0]
+    u8 = lambda d, a: d[a - 0x400000]
+    row = lambda d, a: bytes(u8(d, a + i * 15 + 0xD) for i in range(20))
+
+    def expected(d, inside_only):
+        counts, total = [0, 0, 0], 0
+        threshold = 3 if inside_only else 4
+        for p in range(u32(d, 0x4C3B10) + 0xC8, u32(d, 0x4C3B78), 0xC8):
+            if u8(d, p + 4) != 2 or (inside_only and u8(d, p + 0x4F) == 0xFF):
+                continue
+            food, drink = struct.unpack_from('bb', d, p + 0x50 - 0x400000)
+            total += 1
+            if food < threshold and drink < threshold:
+                counts[0] += 1
+            elif food < threshold:
+                counts[1] += 1
+            elif drink < threshold:
+                counts[2] += 1
+        result = b''.join(bytes([thought]) * (n * 20 // total if total else 0)
+                          for thought, n in zip((8, 4, 5), counts))
+        return result + bytes([6]) * (20 - len(result))
+
+    paused = ['--fps', '30', '--key', '54:19']  # P pauses guest movement before the overview call.
+    seed = dump_bytes(exe, 'none', 56, paused, 55)
+    first, end = u32(seed, 0x4C3B10), u32(seed, 0x4C3B78)
+    guests = [p for p in range(first + 0xC8, end, 0xC8) if u8(seed, p + 4) == 2]
+    assert len(guests) >= 26
+    extra = list(paused)
+    # Exercise all four hunger/thirst categories at the rule's 2/3 threshold,
+    # a negative fullness value, and a guest marked outside with 0xFF.
+    for p, (member, food, drink) in zip(guests, ((0, 2, 2), (0, 2, 3), (0, 3, 2),
+                                                (0, 3, 3), (0xFF, -1, -1), (0, -1, 4))):
+        for off, value in ((0x4F, member), (0x50, food), (0x51, drink)):
+            extra += ['--poke', '56:%x=%02x' % (p + off, value & 0xFF)]
+    # Mark 20 satisfied guests as outside. Excluding this many changes at
+    # least one displayed icon even after percentages are rounded down.
+    for p in guests[6:26]:
+        for off, value in ((0x4F, 0xFF), (0x50, 4), (0x51, 4)):
+            extra += ['--poke', '56:%x=%02x' % (p + off, value)]
+    extra += ['--call', '56.1:43091a']
+    off = dump_bytes(exe, 'none', 57.5, extra, 56.5)
+    on = dump_bytes(exe, 'park-guests-only', 57.5, extra, 56.5)
+    ok = check(row(off, 0x4BC944) == expected(off, False),
+               'park-guests-only: off keeps original needs counts')
+    ok &= check(row(on, 0x4BC944) == expected(on, True),
+                'park-guests-only: on excludes outside needs')
+    ok &= check(row(on, 0x4BC944) != row(off, 0x4BC944),
+                'park-guests-only: toggle changes displayed proportions')
+    ok &= check(row(on, 0x4BC818) == row(off, 0x4BC818),
+                'park-guests-only: mood row stays unchanged')
+    ok &= check(on[first - 0x400000:end - 0x400000] == off[first - 0x400000:end - 0x400000],
+                'park-guests-only: all person records unchanged')
+    empty_extra = list(paused)
+    for p in guests:
+        empty_extra += ['--poke', '56:%x=ff' % (p + 0x4F)]
+    empty_extra += ['--call', '56.1:43091a']
+    empty = dump_bytes(exe, 'park-guests-only', 57.5, empty_extra, 56.5)
+    ok &= check(expected(empty, True) == bytes([6]) * 20 and row(empty, 0x4BC944) == bytes([6]) * 20,
+                'park-guests-only: empty park clears old complaints')
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--exe', default=os.path.join(HERE, 'build', 'themepark.exe') if os.name == 'nt'
@@ -260,7 +326,7 @@ def main():
         print('SKIP: needs game/ (with DEMO.GY) and a build at %s' % exe)
         return 0
     ok = all([guards(exe), unstick(exe), advisor(exe), escort(exe), entertainers(exe), handymen(exe), building(exe),
-              lights(exe), esc(exe), deal(exe), engineers(exe), erase(exe)])
+              lights(exe), esc(exe), deal(exe), engineers(exe), erase(exe), park_guests_only(exe)])
     print('modern rules: %s' % ('pass' if ok else 'FAIL'))
     return 0 if ok else 1
 

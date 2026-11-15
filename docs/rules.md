@@ -24,6 +24,7 @@ lights=1
 esc=1
 deal=1
 erase=1
+park-guests-only=1
 ```
 
 For one run, `--rules guards,unstick` turns exactly those on (and the rest
@@ -278,6 +279,21 @@ queue. Holding the button and moving takes up only the first tile.
 the pointer crosses is taken up, through the same command a right click
 sends, so a network game sees it
 as clicks. Only paths: rides, shops and scenery keep their own ways of going.
+
+### Needs overview counts park guests only (`park-guests-only`)
+
+**In 1994:** the hunger/thirst row of the visitor overview counts every
+visitor record, including people who have not entered or have already left
+the park. The mood row already uses the park's guest counts.
+
+**With the rule:** the hunger/thirst row counts only visitors inside the
+park, using the game's own inside/outside marker. The overview's fullness
+threshold is lowered from 4 to 3: a food or drink fullness value of 3 is now
+enough to avoid the corresponding hunger or thirst complaint; the original
+requires at least 4. Even with this lower threshold, keeping nearly all
+visitors fed and hydrated remains difficult in play. Rounding stays as in
+1994. If nobody is inside, the row shows neutral symbols instead of retaining
+old complaints.
 
 ## Asked for, and not possible
 
