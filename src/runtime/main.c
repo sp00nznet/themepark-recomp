@@ -37,6 +37,7 @@ extern const uint8_t intro_image[];
 extern const recomp_dispatch_entry_t intro_dispatch_table[];
 #endif
 extern double game_fps;   /* game.c */
+int timing_log, no_speedup;   /* --timing, --no-speedup: read by present_3ds.c, ignored elsewhere */
 extern volatile int res_w;   /* game.c: the park's width (#11) */
 int res_parse(const char* s);
 extern volatile int state_request;   /* game.c: save states */
@@ -322,6 +323,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--seconds") && i + 1 < argc) seconds = atof(argv[++i]);
         else if (!strcmp(argv[i], "--speed") && i + 1 < argc) dos32_speed = atof(argv[++i]);
         else if (!strcmp(argv[i], "--fps") && i + 1 < argc) game_fps = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--timing")) timing_log = 1;          /* 3DS: timing.log, once a second */
+        else if (!strcmp(argv[i], "--no-speedup")) no_speedup = 1;      /* 3DS: original-3DS clock and no L2 */
         else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {
             int m = present_scale_from_name(argv[++i]);
             if (m < 0) { fprintf(stderr, "themepark: --scale is sharp, smooth, crt, nearest or integer\n"); return 2; }
