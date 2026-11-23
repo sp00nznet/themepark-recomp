@@ -146,3 +146,36 @@ offstage run --size 1280x960 --record window.mp4 -- build\themepark.exe --second
 ```
 
 `--seconds` in a window is real time.
+
+## Timing on a 3DS
+
+The 3DS build (`present_3ds.c`) turns on New 3DS speed (804 MHz and the L2 cache) unless
+`--no-speedup`, which runs the console the way an original 3DS does. `--timing` appends a line a
+second to `timing.log` beside the `.3dsx` (`sdmc:/3ds/themepark/timing.log`):
+
+```
+# start: New 3DS, speedup on, --fps 25
+t=1s game=25.0fps busy=63% present=30.0fps blit=11.2ms 640x480
+```
+
+(An example of the format, not a measurement.)
+
+- `game`: game frames a second, counted where the game polls input (`pace_frame`, `game.c`).
+- `busy`: the share of the second the game thread spent working, not waiting for its next
+  frame. Under 100% at `--fps 25` means it keeps up. At `--fps 0` it's 100% by definition,
+  and `game` is the most it can do.
+- `present`, `blit`: the presenter loop's rate and what drawing both screens costs it. If
+  `present` drops whenever `busy` rises, the game thread is starving the presenter: both run
+  on the app core, and the 3DS doesn't time-slice threads of equal priority.
+
+The command line comes from `args.txt` beside the `.3dsx`, one run's flags per file. The four runs:
+
+| Run | `args.txt` | What to do |
+|---|---|---|
+| A | `--timing --nointro` | Two minutes on the title (the attract demo plays a park), then start a game and play into a park for five minutes, building as much as you can. |
+| B | `--timing --nointro --fps 0` | Leave it on the attract demo for two minutes: the most frames a second the 3DS manages. |
+| C | `--timing --nointro --no-speedup` | As A, with original-3DS speed. |
+| D | `--timing --nointro --no-speedup --fps 0` | As B, with original-3DS speed. |
+
+The log keeps growing across runs, and each run starts with a `# start:` line. Bring the file back
+and the numbers go in the 3DS plan (game-ideas #120, `ideas/3ds.md`).

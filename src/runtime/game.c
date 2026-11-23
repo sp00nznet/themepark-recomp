@@ -18,6 +18,11 @@
 
 double game_fps = 25.0;   /* about what a fast 486 managed; main.c --fps */
 
+/* For --timing (present_3ds.c reads them once a second): game frames run, and seconds
+ * spent waiting for the next one. Idle over elapsed is the headroom at this frame rate. */
+volatile long pace_frames;
+volatile double pace_idle_s;
+
 static double next_s;
 
 /* Save states (the settings menu, --save/--load): carried out here, between
@@ -64,7 +69,7 @@ static void pace_hold(double period) {
     QueryPerformanceCounter(&t);
     double now = (double)t.QuadPart / (double)f.QuadPart;
     if (next_s - now > 1.0 || now - next_s > 0.25) next_s = now;   /* first frame, or a long stall */
-    if (next_s > now) dos32_idle(next_s - now);
+    if (next_s > now) { pace_idle_s += next_s - now; dos32_idle(next_s - now); }
     next_s += period;
 }
 
@@ -80,6 +85,7 @@ void pace_frame(void (*lifted)(void)) {
     int req = state_request;
     if (req) { state_request = 0; do_state(req); }
     rules_frame();
+    pace_frames++;
     polled = 1;
     pace_wait();
     lifted();
