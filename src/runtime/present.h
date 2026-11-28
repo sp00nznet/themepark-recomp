@@ -1,9 +1,10 @@
-/* The window: shows dos32's screen and feeds it keys and the mouse (present.c). */
+/* The window: pcrecomp's runtime/present on Windows, Linux, macOS and the
+ * browser (present.c is what Theme Park adds to it); present_3ds.c on the 3DS. */
 #pragma once
+#ifndef __3DS__
+#include "present/present.h"
+#else
 #include <stdint.h>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 enum { SCALE_SHARP, SCALE_SMOOTH, SCALE_CRT, SCALE_NEAREST, SCALE_INTEGER, SCALE_COUNT };
 
@@ -29,10 +30,4 @@ int present_test(const char* dir);
 
 /* Close the window from another thread (the game exited). */
 void present_close(void);
-
-#ifdef _WIN32
-/* present_d3d.c: scale w x h pixels (0x00RRGGBB) into rect r of a cw x ch
- * client area. Returns 0 if Direct3D is unavailable (use GDI). */
-int d3d_present(HWND hw, const uint32_t* px, int w, int h, const RECT* r, int cw, int ch,
-                int mode, int look, int vsync);
 #endif

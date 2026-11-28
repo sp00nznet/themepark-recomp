@@ -16,10 +16,11 @@ src\recomp\gen\   (generated, gitignored)
 build\themepark.exe                    build-linux/themepark
    pcrecomp runtime/dos32/dos32.c   DOS/4GW, DPMI, DOS, BIOS, VGA, mouse, timer (the guest's world)
    src/runtime/main.c               options, the game thread, headless --record, scripted input
-   src/runtime/present.c            Windows: the window, keyboard, mouse, themepark.ini
-   src/runtime/present_d3d.c        Windows: Direct3D 11 scaling shaders (GDI fallback in present.c)
-   src/runtime/present_sdl.c        Linux: the same window on SDL2, its scaling and dialogs
-   src/runtime/pad.c                an Xbox controller as the mouse and keys (XInput; SDL on Linux)
+   pcrecomp runtime/present/        the window: Direct3D 11 scaling (GDI fallback), SDL2 on Linux and
+                                    macOS, fullscreen, the mouse, the pad, themepark.ini (its docs/PRESENT.md)
+   src/runtime/present.c            what Theme Park adds to it: the frame source, the speed keys, its menu
+   src/runtime/present_3ds.c        the 3DS: the window on libctru's framebuffers
+   src/runtime/pad.c                an Xbox controller as the mouse and keys
    src/runtime/game.c               Theme Park specifics: frame pacing, memory hold-back, save states
    src/runtime/sound.c              HMI SOS replaced: effects and music (docs/sound.md)
    src/runtime/audio.c              the effects mixer on waveOut (SDL audio on Linux)

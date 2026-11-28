@@ -17,6 +17,13 @@ if(NOT HAS_VESA_CUSTOM)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs (dos32_vesa_custom, pcrecomp#123): git -C ${PCRECOMP} pull, or run Setup again: it fetches a current one")
 endif()
 
+if(NOT NINTENDO_3DS AND NOT EXISTS ${PCRECOMP}/runtime/present/present.h)
+  message(FATAL_ERROR "pcrecomp at ${PCRECOMP} has no runtime/present, the window (pcrecomp#213): git -C ${PCRECOMP} pull")
+endif()
+if(NOT NINTENDO_3DS)
+  include(${PCRECOMP}/cmake/pcrecomp_present.cmake)
+endif()
+
 file(STRINGS ${PCRECOMP}/runtime/dos32/dos32.c HAS_POSIX REGEX "fix_case")
 if(NOT WIN32 AND NOT HAS_POSIX)
   message(FATAL_ERROR "pcrecomp at ${PCRECOMP} is older than this game needs on Linux (pcrecomp#84): git -C ${PCRECOMP} pull")
@@ -53,13 +60,13 @@ set(HOST
 if(WIN32)
   # Static CRT, so the exe runs on a machine with no VC++ redistributable.
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
-  add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST}
-    src/runtime/present.c src/runtime/present_d3d.c)
+  add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST} src/runtime/present.c)
+  pcrecomp_present(themepark)
   target_compile_definitions(themepark PRIVATE _CRT_SECURE_NO_WARNINGS)
   # The lifted C: no warnings (there are hundreds of thousands of harmless ones),
   # and wrap-around arithmetic, as the CPU does it.
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "/w;-fno-strict-aliasing;-fwrapv;/O1")
-  target_link_libraries(themepark PRIVATE winmm user32 gdi32 d3d11 dxgi dxguid ws2_32)
+  target_link_libraries(themepark PRIVATE winmm ws2_32)
 elseif(NINTENDO_3DS)
   # The 3DS (devkitARM's 3DS.cmake): libctru straight, no SDL (present_3ds.c,
   # audio.c's ndsp). 24 MB of guest memory; the game folder is read from
@@ -85,7 +92,8 @@ elseif(EMSCRIPTEN)
   set(TP_GAME_DIR ${CMAKE_SOURCE_DIR}/game CACHE PATH "the game folder (GAME and THEME.CD) to pack")
   set(CMAKE_EXECUTABLE_SUFFIX .html)
   add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST}
-    src/runtime/present_sdl.c src/runtime/compat.c)
+    src/runtime/present.c src/runtime/compat.c)
+  pcrecomp_present(themepark)
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "-w;-fno-strict-aliasing;-fwrapv;-O1")
   target_compile_options(themepark PRIVATE -sUSE_SDL=2 -pthread -mtail-call)
   target_compile_definitions(themepark PRIVATE DOS32_SMALL_HOST)
@@ -103,7 +111,8 @@ else()
   pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
   pkg_check_modules(ALSA IMPORTED_TARGET alsa)
   add_executable(themepark ${GEN} src/recomp/gen/image_data.c ${HOST}
-    src/runtime/present_sdl.c src/runtime/compat.c)
+    src/runtime/present.c src/runtime/compat.c)
+  pcrecomp_present(themepark)
   set_source_files_properties(${GEN} src/recomp/gen/image_data.c PROPERTIES COMPILE_OPTIONS "-w;-fno-strict-aliasing;-fwrapv;-O1;-foptimize-sibling-calls")
   target_link_libraries(themepark PRIVATE PkgConfig::SDL2 m pthread)
   if(APPLE)

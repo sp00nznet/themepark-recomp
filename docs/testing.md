@@ -130,9 +130,11 @@ doesn't (the test VMs).
 build\themepark.exe --seconds 70 <script> --present-test DIR
 ```
 
-runs headless, then draws the last screen through every scaling mode with
-Direct3D into a hidden 1440x1080 window and writes each back buffer to
-`DIR\<mode>.bmp`. It exits non-zero if Direct3D could not draw. This is how
+runs headless, then draws the last screen through every scaling mode at
+1440x1080 with pcrecomp's presenter (runtime/present) and writes each to
+`DIR\<mode>.bmp`. It draws offscreen, with no window, so it also runs over
+SSH (session 0), where the old hidden-window test could not make its swap
+chain. It exits non-zero if a mode could not be drawn or written. This is how
 the shaders are checked when no display can be filmed. On Linux it draws with
 SDL's software renderer into a surface, the same scaling as the window's.
 

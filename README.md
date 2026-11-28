@@ -89,7 +89,7 @@ world map into a running park, and a tester has been playing it since 0.2
 | Music | the game's General MIDI songs on the Windows synth, or a music pack of recordings (F10, *Music*; [music/README.md](music/README.md)) |
 | Save states | 9 slots in the settings menu (F10) |
 | The game's own saves | untested |
-| Own presenter | Direct3D 11: integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480; vivid colour (F9), borderless fullscreen (F11); GDI fallback |
+| Presenter | pcrecomp's shared window (`runtime/present`): Direct3D 11, integer (pixels doubled up, the default), sharp-bilinear, smooth, CRT, nearest (F12); window 1x / 2x / 3x of 640x480, reopened where it was left; vivid color (F9), borderless fullscreen (F11); GDI fallback |
 | Browser | experimental (Emscripten): intro, menus and parks play; no music or network game yet |
 | Nintendo 3DS | experimental homebrew: checked in the Azahar emulator, not yet on hardware |
 | Linux | native (gcc, SDL2): conformance 6/6 and save states checked headless; the window, mouse and pad not yet played by hand; music needs a GM synth on ALSA (FluidSynth, TiMidity++) |

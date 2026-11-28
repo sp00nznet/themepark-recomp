@@ -5,6 +5,20 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The window is pcrecomp's shared presenter (`runtime/present`, pcrecomp#213)
+  in place of this repo's own copy: the same keys, menu, scaling and
+  `themepark.ini`, and present-test BMPs byte-identical to before. What it
+  brings: per-monitor DPI awareness (sharp scaling no longer blurred on a
+  scaled monitor), the window reopens where it was left (only if that is
+  still on a screen), fullscreen on the window's own monitor, Alt+F4 closes,
+  no beep for Alt with a game key, F9-F12 act once per press, keys and the
+  mouse are let go when the window loses focus, the mouse clip is restored if
+  Windows drops it, the pad takes the first controller connected, lets go
+  when unplugged and only acts while the window is in front, and
+  `--present-test` draws offscreen, so it runs over SSH too. The display
+  settings come first in the F10 menu, Mute among them.
+
 ## [0.7.1] - 2026-11-12
 
 ### Added
